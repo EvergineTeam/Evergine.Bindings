@@ -11,7 +11,7 @@ The following bindings are currently available in this repository:
 * Auto-generated from vk.xml file included in the KhronosRegistry folder
 
 [![CI](https://github.com/EvergineTeam/Vulkan.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/Vulkan.NET/actions/workflows/CI.yml)
-[![Monthly update check](https://github.com/EvergineTeam/Vulkan.NET/actions/workflows/monthly_update.yml/badge.svg)](https://github.com/EvergineTeam/Vulkan.NET/actions/workflows/monthly_update.yml)
+[![CD](https://github.com/EvergineTeam/Vulkan.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Vulkan.NET/actions/workflows/CD.yml)
 [![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.Vulkan?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.Vulkan)
 
 ### [OpenXR.NET](https://github.com/EvergineTeam/OpenXR.NET)
@@ -19,7 +19,7 @@ The following bindings are currently available in this repository:
 * Auto-generated from xr.xml file included in the KhronosRegistry folder
 
 [![CI](https://github.com/EvergineTeam/OpenXR.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/OpenXR.NET/actions/workflows/CI.yml)
-[![Monthly update check](https://github.com/EvergineTeam/OpenXR.NET/actions/workflows/monthly_update.yml/badge.svg)](https://github.com/EvergineTeam/OpenXR.NET/actions/workflows/monthly_update.yml)
+[![CD](https://github.com/EvergineTeam/OpenXR.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/OpenXR.NET/actions/workflows/CD.yml)
 [![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.OpenXR?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.OpenXR)
 
 ### [WebGPU.NET](https://github.com/EvergineTeam/WebGPU.NET)
