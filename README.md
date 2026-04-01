@@ -1,6 +1,6 @@
 # Evergine Bindings Status
 
-This repository contains low-level bindings for various graphics libraries and frameworks used in Evergine, including Vulkan, OpenXR, WebGL (WebGPU), OpenGL, RenderDoc, ImGui, and Cesium Native.
+This repository contains low-level bindings for various graphics libraries and frameworks used in Evergine, including Vulkan, OpenXR, WebGL (WebGPU), OpenGL, RenderDoc, ImGui, Cesium Native, and Vuforia.
 
 ## Current Bindings
 
@@ -83,5 +83,13 @@ The following bindings are currently available in this repository:
 [![CI](https://github.com/EvergineTeam/Cesium.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/Cesium.NET/actions/workflows/CI.yml)
 [![CD](https://github.com/EvergineTeam/Cesium.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Cesium.NET/actions/workflows/CD.yml)
 [![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.CesiumNative?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.CesiumNative)
+
+### [Vuforia.NET](https://github.com/EvergineTeam/Vuforia.NET)
+* Low-level bindings for the [Vuforia Engine](https://developer.vuforia.com/) in C#
+* Auto-generated from the Vuforia Engine SDK C API
+
+[![CI](https://github.com/EvergineTeam/Vuforia.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/Vuforia.NET/actions/workflows/CI.yml)
+[![CD](https://github.com/EvergineTeam/Vuforia.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Vuforia.NET/actions/workflows/CD.yml)
+[![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.Vuforia?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.Vuforia)
 
 This README serves as a centralized hub for all the bindings available in this repository. You can find more information about each binding by clicking on the links above.
