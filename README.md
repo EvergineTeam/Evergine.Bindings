@@ -92,4 +92,12 @@ The following bindings are currently available in this repository:
 [![CD](https://github.com/EvergineTeam/Vuforia.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Vuforia.NET/actions/workflows/CD.yml)
 [![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.Vuforia?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.Vuforia)
 
+### [JoltPhysics.NET](https://github.com/EvergineTeam/JoltPhysics.NET)
+* Low-level bindings for [JoltPhysics](https://github.com/jrouwe/JoltPhysics) (via [JoltPhysicsC](https://github.com/EvergineTeam/JoltPhysicsC)) in C#
+* Auto-generated from JoltPhysicsC headers using CppAst
+
+[![CI](https://github.com/EvergineTeam/JoltPhysics.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/JoltPhysics.NET/actions/workflows/CI.yml)
+[![CD](https://github.com/EvergineTeam/JoltPhysics.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/JoltPhysics.NET/actions/workflows/CD.yml)
+[![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.JoltPhysics?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.JoltPhysics)
+
 This README serves as a centralized hub for all the bindings available in this repository. You can find more information about each binding by clicking on the links above.
