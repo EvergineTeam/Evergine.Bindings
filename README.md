@@ -1,6 +1,6 @@
 # Evergine Bindings Status
 
-This repository contains low-level bindings for various graphics libraries and frameworks used in Evergine, including Vulkan, OpenXR, WebGL (WebGPU), OpenGL, RenderDoc, ImGui, Cesium Native, and Vuforia.
+This repository contains low-level bindings for various graphics libraries and frameworks used in Evergine.
 
 ## Current Bindings
 
