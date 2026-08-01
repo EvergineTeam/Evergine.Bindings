@@ -4,6 +4,24 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.1.0] - 2026-08-02
+
+Adds the first two agentic workflows. Nothing changes for repositories that do not install them.
+
+### Added
+
+- **`workflows/ci-doctor.md`** — reacts to a failed `CI`, `CD` or `Sync standards` run, diagnoses it, and either opens a pull request fixing workflow configuration, re-runs a transient failure once, or files an issue. Model: `claude-sonnet-4.6`.
+- **`workflows/binding-updater.md`** — fetches the upstream specification declared in `binding.yml`, regenerates, builds, and fixes the generator when a new upstream construct breaks it. Model: `claude-opus-4.6`.
+- **`aw.yml`** — package manifest, so both workflows install with `gh aw add EvergineTeam/Evergine.Bindings/workflows/<name>@v1`.
+
+### Design notes
+
+The two agents divide by *where the fix lives*: anything under `.github/` belongs to the doctor, anything under the generator or its output belongs to the updater. Neither crosses that line.
+
+They hand off through a label rather than a schedule. When the doctor concludes the generator is at fault it files an issue labelled `agent:needs-regen`, and the updater triggers on `issues: [labeled]` as well as on its monthly cron. Without that the diagnosis would sit until the next month; with it, a person can also veto the handoff by removing the label, or force it by adding one.
+
+Both run read-only and write exclusively through `safe-outputs`. Neither can auto-merge: every change is a pull request a person merges.
+
 ## [1.0.0] - 2026-08-01
 
 First release. Establishes the toolbox as the single home for everything that automates the bindings fleet.

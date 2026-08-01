@@ -1,0 +1,7 @@
+manifest-version: "1"
+name: Evergine Bindings Toolbox
+description: Agentic workflows that keep the Evergine binding repositories current and repair their pipelines.
+emoji: 🧩
+includes:
+  - workflows/ci-doctor.md
+  - workflows/binding-updater.md
