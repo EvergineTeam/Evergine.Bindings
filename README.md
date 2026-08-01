@@ -51,7 +51,7 @@ generator:
 | [`git-tree`](docs/adapters/git-tree.md) | WebGPU, RenderDoc, MeshOptimizer, xatlas, Cesium, JoltPhysics | Headers copied from an upstream repository at a pinned tag |
 | [`git-submodule`](docs/adapters/git-submodule.md) | KTX, ImGui | A git submodule pointer |
 
-`language` and `format` are deliberately separate. The upstream project may be written in any language while still exposing a C API — `wgpu-native` is Rust with `language: rust, format: c-header`. The binding output is always C#.
+`language` and `format` are deliberately separate. The upstream project may be written in any language while still exposing a C API: JoltPhysics and cesium-native are both C++ (`language: cpp`) surfaced through a C wrapper (`format: c-header`). The binding output is always C#.
 
 The manifest is validated against [`binding.schema.json`](binding.schema.json).
 

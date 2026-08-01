@@ -11,16 +11,18 @@ These six share an identical generator skeleton — `CsCodeGenerator.cs`, `Heade
 ```yaml
 upstream:
   kind: git-tree
-  language: rust                  # wgpu-native is Rust; it exposes a C API
-  project: https://github.com/gfx-rs/wgpu-native
+  language: cpp                   # JoltPhysics is C++; JoltPhysicsC exposes a C API
+  project: https://github.com/jrouwe/JoltPhysics
   version-from: git-release
   sources:
-    - repo: gfx-rs/wgpu-native
-      ref: v25.0.2.1              # pinned on purpose, see below
-      remote-path: ffi/wgpu.h
-      path: WebGPUGen/WebGPUGen/Headers/wgpu.h
+    - repo: EvergineTeam/JoltPhysicsC
+      ref: main                   # see "Why ref is pinned" below
+      remote-path: JoltC/include/JoltC
+      path: JoltPhysicsGen/Headers/JoltC
       format: c-header
 ```
+
+This is also the clearest illustration of why `language` and `format` are separate fields. The upstream project is C++, so that is what `language` records — it tells the agent what kind of codebase it is reasoning about when a declaration looks wrong. But what actually gets parsed is a C header, which is what `format` records. Cesium.NET is the same shape: `cesium-native` is C++, surfaced through `CesiumC`.
 
 ## How it is fetched
 

@@ -114,8 +114,10 @@
           "description": "Generator/binding name, matching the generator-name input of the reusable workflows."
         },
         "output": {
-          "type": "string",
-          "description": "Directory the generator writes into. Agents treat changes here as generated output, never as hand-written code."
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Directories the generator writes into. Agents treat everything under these paths as generated output and everything outside them as hand-written. A list rather than a single path because some repositories generate into several folders that sit alongside hand-written source -- ImGui.Net writes four, next to files like Types.cs that must not be touched. Keep these paths as narrow as the truth allows: naming a parent folder that also holds hand-written code tells the agent it may overwrite it."
         }
       }
     },
