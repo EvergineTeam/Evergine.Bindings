@@ -1,0 +1,59 @@
+name: 'Generate .NET Bindings'
+description: 'Generates .NET bindings using a .NET generator tool (Generate-Bindings-DotNet.ps1)'
+author: 'Evergine Team'
+
+inputs:
+  script-path:
+    description: 'Path to the Generate-Bindings-DotNet.ps1 script'
+    required: false
+    default: './build/scripts/Generate-Bindings-DotNet.ps1'
+  generator-project:
+    description: 'Path to the generator .csproj file'
+    required: true
+  generator-name:
+    description: 'Name of the generator (used for display and executable name)'
+    required: true
+  target-framework:
+    description: 'Target framework for the generator'
+    required: false
+    default: 'net8.0'
+  runtime-identifier:
+    description: 'Runtime identifier for the generator (e.g., win-x64). If empty, will be platform-specific'
+    required: false
+    default: 'win-x64'
+  build-verbosity:
+    description: 'Build verbosity level for dotnet commands'
+    required: false
+    default: 'normal'
+  build-configuration:
+    description: 'Build configuration (Debug/Release)'
+    required: false
+    default: 'Release'
+  restore-workloads:
+    description: 'Restore .NET workloads for projects before packaging'
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore .NET workloads for generator
+      if: ${{ inputs.restore-workloads == 'true' }}
+      shell: pwsh
+      run: |
+        dotnet workload restore "${{ inputs.generator-project }}"
+        
+    - name: Generate Bindings
+      shell: pwsh
+      run: |
+        $scriptPath = "${{ inputs.script-path }}"
+        if (-not (Test-Path $scriptPath)) {
+          Write-Host "ERROR: script not found at: $scriptPath" -ForegroundColor Red
+          exit 1
+        }
+        & ./$scriptPath `
+          -GeneratorProject "${{ inputs.generator-project }}" `
+          -GeneratorName "${{ inputs.generator-name }}" `
+          -TargetFramework "${{ inputs.target-framework }}" `
+          -RuntimeIdentifier "${{ inputs.runtime-identifier }}" `
+          -BuildVerbosity "${{ inputs.build-verbosity }}" `
+          -BuildConfiguration "${{ inputs.build-configuration }}"

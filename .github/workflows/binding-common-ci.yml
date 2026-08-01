@@ -1,0 +1,164 @@
+name: Binding CI (Reusable)
+
+description: >
+  Reusable workflow for bindings.
+
+on:
+  workflow_call:
+    inputs:
+      generator-project:
+        description: 'Path to the generator .csproj file'
+        required: true
+        type: string
+      generator-name:
+        description: 'Name of the generator/binding'
+        required: true
+        type: string
+      binding-project:
+        description: 'Path to the binding .csproj file'
+        required: true
+        type: string
+      nuget-dependency-projects:
+        description: 'Comma-separated list of .csproj paths that need to be built first (dependencies) but won''t generate NuGet packages'
+        required: false
+        type: string
+        default: ''
+      target-framework:
+        description: 'Target framework for the binding'
+        required: false
+        type: string
+        default: 'net8.0'
+      runtime-identifier:
+        description: 'Runtime identifier (optional, for platform-specific bindings)'
+        required: false
+        type: string
+        default: 'win-x64'
+      build-verbosity:
+        description: 'dotnet verbosity level'
+        required: false
+        type: string
+        default: 'normal'
+      build-configuration:
+        description: 'Build configuration (Release, Debug, etc.)'
+        required: false
+        type: string
+        default: 'Release'
+      restore-workloads:
+        description: 'Restore .NET workloads for projects before packaging'
+        required: false
+        type: boolean
+        default: false
+      nuget-artifacts:
+        description: 'Upload generated NuGets as workflow artifacts (true/false)'
+        required: false
+        type: boolean
+        default: false
+      bindings-script-path:
+        description: 'Path to the Generate-Bindings-DotNet.ps1 script'
+        required: false
+        type: string
+        default: 'build/scripts/Generate-Bindings-DotNet.ps1'
+      nugets-script-path:
+        description: 'Path to the Generate-NuGets-DotNet.ps1 script'
+        required: false
+        type: string
+        default: 'build/scripts/Generate-NuGets-DotNet.ps1'
+      helpers-path:
+        description: 'Path to the Helpers.ps1 file. Defaults to Helpers.ps1 in the same directory as the script.'
+        required: false
+        type: string
+        default: 'build/scripts/Helpers.ps1'
+      version:
+        description: 'Direct version string to use for packages (e.g., "3.4.22.288-local"). Cannot be used with revision.'
+        required: false
+        type: string
+        default: ''
+      revision:
+        description: 'Revision number to append to date-based version (e.g., "123" -> "2025.10.29.123"). Cannot be used with version.'
+        required: false
+        type: string
+        default: ''
+      version-suffix:
+        description: 'Version suffix to append to the final version (e.g., "nightly", "beta"). Will add dash separator automatically.'
+        required: false
+        type: string
+        default: ''
+      include-symbols:
+        description: 'Whether to include debug symbols in packages'
+        required: false
+        type: boolean
+        default: false
+      symbols-format:
+        description: 'Symbol package format: snupkg (modern) or symbols.nupkg (legacy)'
+        required: false
+        type: string
+        default: 'snupkg'
+      dotnet-version:
+        description: 'Version of .NET SDK to use (e.g., 8.x)'
+        required: false
+        type: string
+        default: '8.x'
+      runner-os:
+        description: 'GitHub runner OS (e.g., ubuntu-latest, windows-latest)'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+jobs:
+  build_and_generate:
+    runs-on: ${{ inputs.runner-os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Generate bindings
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-bindings-dotnet@v1
+        with:
+          script-path: ${{ inputs.bindings-script-path }}
+          generator-project: ${{ inputs.generator-project }}
+          generator-name: ${{ inputs.generator-name }}
+          target-framework: ${{ inputs.target-framework }}
+          runtime-identifier: ${{ inputs.runtime-identifier }}
+          build-verbosity: ${{ inputs.build-verbosity }}
+          build-configuration: ${{ inputs.build-configuration }}
+          restore-workloads: ${{ inputs.restore-workloads }}
+      
+      - name: Restore .NET workloads for binding project
+        if: inputs.nuget-artifacts == false
+        shell: pwsh
+        run: |
+          dotnet workload restore "${{ inputs.binding-project }}"
+
+      - name: Build binding project
+        if: inputs.nuget-artifacts == false
+        shell: pwsh
+        run: |
+          dotnet build "${{ inputs.binding-project }}" -c "${{ inputs.build-configuration }}" -v "${{ inputs.build-verbosity }}" --framework "${{ inputs.target-framework }}"
+
+      - name: Generate NuGets
+        if: inputs.nuget-artifacts == true
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-nugets-dotnet@v1
+        with:
+          script-path: ${{ inputs.nugets-script-path }}
+          helpers-path: ${{ inputs.helpers-path }}
+          version: ${{ inputs.version }}
+          revision: ${{ inputs.revision }}
+          version-suffix: ${{ inputs.version-suffix }}
+          projects: ${{ inputs.binding-project }}
+          dependency-projects: ${{ inputs.nuget-dependency-projects }}
+          build-verbosity: ${{ inputs.build-verbosity }}
+          build-configuration: ${{ inputs.build-configuration }}
+          restore-workloads: ${{ inputs.restore-workloads }}
+          include-symbols: ${{ inputs.include-symbols }}
+          symbols-format: ${{ inputs.symbols-format }}
+
+      - name: Upload NuGets as artifact
+        if: inputs.nuget-artifacts == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: nugets
+          path: '**/*.nupkg'

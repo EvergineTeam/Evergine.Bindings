@@ -1,6 +1,59 @@
-# Evergine Bindings Status
+# Evergine Bindings
 
-This repository contains low-level bindings for various graphics libraries and frameworks used in Evergine.
+Hub and automation toolbox for the low-level bindings used in Evergine. This repository does not contain a binding itself: it holds the shared workflows that build, publish and maintain every binding in the fleet, and it tracks their status.
+
+## Toolbox
+
+The reusable workflows and composite actions that every binding repository consumes.
+
+```yaml
+# in a binding's .github/workflows/CI.yml
+uses: EvergineTeam/Evergine.Bindings/.github/workflows/binding-common-ci.yml@v1
+```
+
+| Workflow | Purpose |
+|---|---|
+| `binding-common-ci.yml` | Build the generator, regenerate the binding, pack the NuGet |
+| `binding-simple-cd.yml` | Publish a binding whose specification is vendored in the repository |
+| `binding-xml-cd.yml` | Download an XML registry, regenerate and publish |
+
+**Versioning.** Consume the moving major tag `@v1`. Immutable tags (`@v1.0.0`) exist for pinning a specific release. **Never point at a branch** — a branch reference silently drifts and is exactly how a repository ends up running a different pipeline from its siblings without anyone noticing.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for what changed between versions.
+
+### The `binding.yml` manifest
+
+Each binding repository declares, in a `binding.yml` at its root, where its upstream specification lives, how it is fetched and what it publishes. It is the single description that both the deterministic workflows and the agentic ones read.
+
+```yaml
+toolbox: 1.0.0
+package:
+  id: Evergine.Bindings.Vulkan
+  project: VulkanGen/Evergine.Bindings.Vulkan/Evergine.Bindings.Vulkan.csproj
+upstream:
+  kind: http-file
+  language: c
+  sources:
+    - url: https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/main/xml/vk.xml
+      path: KhronosRegistry/vk.xml
+      format: khronos-xml
+generator:
+  project: VulkanGen/VulkanGen/VulkanGen.csproj
+  name: Vulkan
+  output: VulkanGen/Evergine.Bindings.Vulkan/Generated
+```
+
+`upstream.kind` selects the adapter that knows how to fetch that kind of source:
+
+| Adapter | Used by | How the specification arrives |
+|---|---|---|
+| [`http-file`](docs/adapters/http-file.md) | Vulkan, OpenXR, OpenGL | A registry file at a stable URL |
+| [`git-tree`](docs/adapters/git-tree.md) | WebGPU, RenderDoc, MeshOptimizer, xatlas, Cesium, JoltPhysics | Headers copied from an upstream repository at a pinned tag |
+| [`git-submodule`](docs/adapters/git-submodule.md) | KTX, ImGui | A git submodule pointer |
+
+`language` and `format` are deliberately separate. The upstream project may be written in any language while still exposing a C API: JoltPhysics and cesium-native are both C++ (`language: cpp`) surfaced through a C wrapper (`format: c-header`). The binding output is always C#.
+
+The manifest is validated against [`binding.schema.json`](binding.schema.json).
 
 ## Current Bindings
 
