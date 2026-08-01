@@ -4,6 +4,14 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.1.1] - 2026-08-02
+
+### Fixed
+
+- **`binding-updater` now installs the .NET SDK before running.** The workflow's whole job is to run a generator and build a binding, and it had no `dotnet` available. It would have reached the build step, found no SDK, and reported a broken generator that was not broken -- a false diagnosis on the one agent allowed to modify generator code. Added as a `steps:` block, which runs deterministically before the agent starts.
+
+Pinned to `actions/setup-dotnet@v5` to match `binding-common-ci.yml` rather than the newer v6, so the agent and CI provision the SDK identically.
+
 ## [1.1.0] - 2026-08-02
 
 Adds the first two agentic workflows. Nothing changes for repositories that do not install them.
