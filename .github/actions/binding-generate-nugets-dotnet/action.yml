@@ -1,0 +1,129 @@
+name: 'Generate .NET NuGet Packages'
+description: 'Generates NuGet packages for .NET projects using dotnet pack (Generate-NuGets-DotNet.ps1)'
+author: 'Evergine Team'
+
+inputs:
+  script-path:
+    description: 'Path to the Generate-NuGets-DotNet.ps1 script'
+    required: false
+    default: './build/scripts/Generate-NuGets-DotNet.ps1'
+  helpers-path:
+    description: 'Path to the Helpers.ps1 file. Defaults to Helpers.ps1 in the same directory as the script.'
+    required: false
+    default: './build/scripts/Helpers.ps1'
+  version:
+    description: 'Direct version string to use for packages (e.g., "3.4.22.288-local"). Cannot be used with revision.'
+    required: false
+    default: ''
+  revision:
+    description: 'Revision number to append to date-based version (e.g., "123" -> "2025.10.29.123"). Cannot be used with version.'
+    required: false
+    default: ''
+  version-suffix:
+    description: 'Version suffix to append to the final version (e.g., "nightly", "beta"). Will add dash separator automatically.'
+    required: false
+    default: ''
+  projects:
+    description: 'Comma-separated or newline-separated list of .csproj paths to pack'
+    required: true
+  dependency-projects:
+    description: 'Comma-separated or newline-separated list of .csproj paths that need to be built first (dependencies) but won''t generate NuGet packages'
+    required: false
+    default: ''
+  output-folder:
+    description: 'Base folder for NuGet package output'
+    required: false
+    default: 'nupkgs'
+  build-verbosity:
+    description: 'dotnet verbosity level'
+    required: false
+    default: 'normal'
+  build-configuration:
+    description: 'Build configuration (Release, Debug, etc.)'
+    required: false
+    default: 'Release'
+  include-symbols:
+    description: 'Whether to include debug symbols in packages'
+    required: false
+    default: 'false'
+  symbols-format:
+    description: 'Symbol package format: snupkg (modern) or symbols.nupkg (legacy)'
+    required: false
+    default: 'snupkg'
+  restore-workloads:
+    description: 'Restore .NET workloads for projects before packaging'
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore .NET workloads for projects
+      if: ${{ inputs.restore-workloads == 'true' }}
+      shell: pwsh
+      run: |
+        $projects = "${{ inputs.projects }}" -split '[,\n]'
+        foreach ($proj in $projects) {
+          $projPath = $proj.Trim()
+          if ($projPath) {
+            dotnet workload restore "$projPath"
+          }
+        }
+
+    - name: Generate NuGet Packages
+      id: generate
+      shell: pwsh
+      run: |
+        $scriptPath = "${{ inputs.script-path }}"
+        if (-not (Test-Path $scriptPath)) {
+          Write-Host "ERROR: script not found at: $scriptPath" -ForegroundColor Red
+          exit 1
+        }
+        # Parse projects from comma or newline separated input
+        $projectsInput = "${{ inputs.projects }}"
+        $projects = $projectsInput -split '[,\n]' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+        
+        # Parse dependency projects from comma or newline separated input
+        $dependencyProjectsInput = "${{ inputs.dependency-projects }}"
+        $dependencyProjects = @()
+        if (-not [string]::IsNullOrWhiteSpace($dependencyProjectsInput)) {
+          $dependencyProjects = $dependencyProjectsInput -split '[,\n]' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+        }
+        
+        # Build arguments
+        $args = @{
+          Projects = $projects
+          DependencyProjects = $dependencyProjects
+          OutputFolderBase = "${{ inputs.output-folder }}"
+          BuildVerbosity = "${{ inputs.build-verbosity }}"
+          BuildConfiguration = "${{ inputs.build-configuration }}"
+          IncludeSymbols = [System.Convert]::ToBoolean("${{ inputs.include-symbols }}")
+          SymbolsFormat = "${{ inputs.symbols-format }}"
+        }
+        # Add helpers path if provided
+        $helpersPath = "${{ inputs.helpers-path }}"
+        if (-not [string]::IsNullOrWhiteSpace($helpersPath)) {
+          $args.HelpersPath = $helpersPath
+        }
+        
+        # Add version suffix if provided
+        $versionSuffix = "${{ inputs.version-suffix }}"
+        if (-not [string]::IsNullOrWhiteSpace($versionSuffix)) {
+          $args.VersionSuffix = $versionSuffix
+        }
+        # Add version or revision (mutually exclusive)
+        $version = "${{ inputs.version }}"
+        $revision = "${{ inputs.revision }}"
+        if (-not [string]::IsNullOrWhiteSpace($version) -and -not [string]::IsNullOrWhiteSpace($revision)) {
+          Write-Host "ERROR: Cannot specify both version and revision" -ForegroundColor Red
+          exit 1
+        }
+        if (-not [string]::IsNullOrWhiteSpace($version)) {
+          $args.Version = $version
+        } elseif (-not [string]::IsNullOrWhiteSpace($revision)) {
+          $args.Revision = $revision
+        } else {
+          Write-Host "ERROR: Must specify either version or revision" -ForegroundColor Red
+          exit 1
+        }
+        # Execute script
+        & ./$scriptPath @args

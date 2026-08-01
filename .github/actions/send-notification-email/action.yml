@@ -1,0 +1,51 @@
+name: 'Send Notification Email'
+description: 'Send failure notifications via email using configurable provider'
+
+inputs:
+  sendgrid-token:
+    description: 'SendGrid API token'
+    required: true
+  from-email:
+    description: 'Sender email address'
+    required: true
+  to-emails:
+    description: 'Recipient email addresses (comma-separated or JSON array)'
+    required: true
+  subject:
+    description: 'Email subject'
+    required: true
+  additional-info:
+    description: 'Additional context-specific information to append to the message'
+    required: false
+    default: ''
+  individual:
+    description: 'Send individual emails'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build complete message
+      shell: pwsh
+      id: build_message
+      run: |
+        $message = "Add-on CD publish failed for repository: ${{ github.repository }}`n`nRepository: ${{ github.repository }}`nBranch: ${{ github.ref_name }}`nWorkflow: ${{ github.workflow }}`nRun ID: ${{ github.run_id }}`n`nView the failed run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        if ("${{ inputs.additional-info }}" -ne "") {
+          $message += "`n`n${{ inputs.additional-info }}"
+        }
+        Write-Host "Email message to send:" 
+        Write-Host $message
+        "complete_message<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        $message | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+    - name: Send email via SendGrid
+      uses: mmichailidis/sendgrid-mail-action@v1.1
+      with:
+        sendgrid-token: ${{ inputs.sendgrid-token }}
+        mail: ${{ inputs.to-emails }}
+        from: ${{ inputs.from-email }}
+        subject: ${{ inputs.subject }}
+        individual: ${{ inputs.individual }}
+        text: ${{ steps.build_message.outputs.complete_message }}

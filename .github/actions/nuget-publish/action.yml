@@ -1,0 +1,100 @@
+name: 'Publish NuGet Packages'
+description: 'Publishes NuGet packages to NuGet.org or Azure Artifacts with feed-specific authentication.'
+author: 'Evergine Team'
+
+inputs:
+  packages-folder:
+    description: 'Folder containing packages to publish'
+    required: false
+    default: 'nupkgs'
+  source-url:
+    description: 'NuGet feed source URL'
+    required: false
+    default: 'https://api.nuget.org/v3/index.json'
+  auth-token:
+    description: 'Token used for publishing (NuGet API key or Azure Artifacts PAT)'
+    required: true
+  package-pattern:
+    description: 'Glob pattern for packages to publish'
+    required: false
+    default: '**/*.nupkg'
+  skip-duplicate:
+    description: 'Skip packages that already exist in the feed'
+    required: false
+    default: 'true'
+  no-symbols:
+    description: 'Do not publish symbols packages'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Publish packages
+      shell: pwsh
+      env:
+        AUTH_TOKEN: ${{ inputs.auth-token }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $packagesFolder = "${{ inputs.packages-folder }}"
+        $sourceUrl = "${{ inputs.source-url }}"
+        $authToken = "$env:AUTH_TOKEN"
+        $packagePattern = "${{ inputs.package-pattern }}"
+        $skipDuplicate = [System.Convert]::ToBoolean("${{ inputs.skip-duplicate }}")
+        $noSymbols = [System.Convert]::ToBoolean("${{ inputs.no-symbols }}")
+
+        if (-not (Test-Path $packagesFolder)) {
+          Write-Error "Packages folder not found: $packagesFolder"
+          exit 1
+        }
+
+        if ([string]::IsNullOrWhiteSpace($authToken)) {
+          Write-Error "Input 'auth-token' is required and cannot be empty."
+          exit 1
+        }
+
+        $packages = Get-ChildItem -Path $packagesFolder -Filter *.nupkg -Recurse -File
+        if ($packages.Count -eq 0) {
+          Write-Error "No .nupkg files found under: $packagesFolder"
+          exit 1
+        }
+
+        $isAzureArtifacts = $sourceUrl -match 'dev\.azure\.com|visualstudio\.com'
+
+        $pushPath = Join-Path $packagesFolder $packagePattern
+        $pushArgs = @("nuget", "push", $pushPath)
+
+        if ($skipDuplicate) { $pushArgs += "--skip-duplicate" }
+        if ($noSymbols)     { $pushArgs += "--no-symbols" }
+
+        if ($isAzureArtifacts) {
+          # Register the feed under a controlled, valid name in a temp nuget.config so we never
+          # touch the repo's own nuget.config (which may have source names with spaces that would
+          # cause 'dotnet nuget auth' to fail). --store-password-in-clear-text is required on
+          # Linux agents where no OS credential store is available.
+          $sourceName = "evergine-azure-artifacts-publish"
+          $tempConfig = Join-Path ([System.IO.Path]::GetTempPath()) "nuget-publish-$([System.Guid]::NewGuid()).config"
+
+          # dotnet nuget add source --configfile requires the file to already exist
+          '<?xml version="1.0" encoding="utf-8"?><configuration></configuration>' | Set-Content $tempConfig -Encoding utf8
+
+          try {
+            dotnet nuget add source $sourceUrl `
+              --name $sourceName `
+              --username "github-actions" `
+              --password $authToken `
+              --store-password-in-clear-text `
+              --configfile $tempConfig
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            $pushArgs += @("--source", $sourceName, "--api-key", "AzureArtifacts", "--configfile", $tempConfig)
+            dotnet @pushArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-Item $tempConfig -Force -ErrorAction SilentlyContinue
+          }
+        } else {
+          $pushArgs += @("--source", $sourceUrl, "--api-key", $authToken)
+          dotnet @pushArgs
+        }

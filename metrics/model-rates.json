@@ -1,0 +1,46 @@
+{
+  "$comment": [
+    "AI Credit rates per model, used to turn token counts into cost.",
+    "GitHub Copilot moved from premium requests to usage-based billing on 2026-06-01.",
+    "1 AI Credit = 0.01 USD. Consumption is computed from input, output and cached tokens,",
+    "at a rate that depends on the model.",
+    "",
+    "This file is VERSIONED ON PURPOSE. Rates change; historical cost must never be",
+    "recomputed with current prices. Add a new entry to `history` when a rate changes,",
+    "and leave the previous one in place with its `until` date. The collector picks the",
+    "entry whose date range contains the run's timestamp.",
+    "",
+    "WARNING: the numbers below are PLACEHOLDERS. They must be replaced with the real",
+    "published rates before the dashboard reports any cost figure. Until then the",
+    "collector leaves `credits` and `cost` unset and the UI renders them as an em dash,",
+    "which is honest. A wrong rate silently produces a wrong budget, which is worse",
+    "than no number at all."
+  ],
+
+  "credit-usd": 0.01,
+  "verified": false,
+  "verified-at": null,
+  "source": "https://docs.github.com/en/copilot/reference/copilot-billing",
+
+  "history": [
+    {
+      "from": "2026-06-01",
+      "until": null,
+      "note": "PLACEHOLDER - not verified against published rates. Do not report cost until `verified` is true.",
+      "models": {
+        "claude-opus-4.6":   { "credits-per-1m-input": null, "credits-per-1m-output": null, "credits-per-1m-cached": null },
+        "claude-sonnet-4.6": { "credits-per-1m-input": null, "credits-per-1m-output": null, "credits-per-1m-cached": null },
+        "claude-haiku-4.5":  { "credits-per-1m-input": null, "credits-per-1m-output": null, "credits-per-1m-cached": null },
+        "gpt-5.4":           { "credits-per-1m-input": null, "credits-per-1m-output": null, "credits-per-1m-cached": null },
+        "gpt-5.4-mini":      { "credits-per-1m-input": null, "credits-per-1m-output": null, "credits-per-1m-cached": null }
+      }
+    }
+  ],
+
+  "plan-allowance": {
+    "$comment": "Included AI Credits per user per month, used to draw the budget line in the dashboard.",
+    "business": 1900,
+    "enterprise": 3900,
+    "current": "enterprise"
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EvergineTeam/Evergine.Bindings/blob/main/binding.schema.json",
+  "title": "Evergine binding manifest",
+  "description": "Declares where a binding's upstream specification lives, how it is generated and what it publishes. Read by both the deterministic reusable workflows and the agentic workflows.",
+  "type": "object",
+  "required": ["toolbox", "package", "upstream", "generator"],
+  "additionalProperties": false,
+
+  "properties": {
+    "toolbox": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Toolbox version this manifest was written against. The toolbox-updater compares it with the current release to decide whether a manifest migration is needed."
+    },
+
+    "package": {
+      "type": "object",
+      "required": ["id", "project"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "NuGet package id, e.g. Evergine.Bindings.Vulkan."
+        },
+        "project": {
+          "type": "string",
+          "description": "Path to the binding .csproj, relative to the repository root."
+        },
+        "target-framework": {
+          "type": "string",
+          "description": "Target framework moniker, e.g. net10.0."
+        },
+        "runtime-identifier": {
+          "type": "string",
+          "description": "RID passed to the build, e.g. win-x64. Empty means portable."
+        }
+      }
+    },
+
+    "upstream": {
+      "type": "object",
+      "required": ["kind", "language", "sources"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["http-file", "git-tree", "git-submodule"],
+          "description": "Adapter used to fetch the specification. See docs/adapters/."
+        },
+        "language": {
+          "type": "string",
+          "description": "Language the upstream project is written in (c, cpp, rust, zig, ...). Informational: it tells the agent what kind of source it is reasoning about. The binding output is always C#."
+        },
+        "project": {
+          "type": "string",
+          "format": "uri",
+          "description": "Home of the upstream project. Used to look up releases and derive the upstream version."
+        },
+        "version-from": {
+          "enum": ["git-tag", "git-release", "submodule-sha", "spec-attribute", "none"],
+          "description": "How to determine which upstream version the vendored spec corresponds to."
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "description": "One entry per file or tree that feeds the generator.",
+          "items": {
+            "type": "object",
+            "required": ["path", "format"],
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Direct download URL. Required for kind: http-file."
+              },
+              "repo": {
+                "type": "string",
+                "description": "owner/name of the upstream repository. Required for kind: git-tree and git-submodule."
+              },
+              "ref": {
+                "type": "string",
+                "description": "Branch, tag or SHA to read from. Required for kind: git-tree."
+              },
+              "remote-path": {
+                "type": "string",
+                "description": "Path inside the upstream repository. Required for kind: git-tree."
+              },
+              "path": {
+                "type": "string",
+                "description": "Destination path in this repository, relative to the root."
+              },
+              "format": {
+                "enum": ["khronos-xml", "c-header", "webidl", "json-registry", "other"],
+                "description": "How the file must be parsed. Decoupled from `language` on purpose: a Rust project exposing a C API is language: rust, format: c-header."
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "generator": {
+      "type": "object",
+      "required": ["project", "name", "output"],
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Path to the generator .csproj, relative to the repository root."
+        },
+        "name": {
+          "type": "string",
+          "description": "Generator/binding name, matching the generator-name input of the reusable workflows."
+        },
+        "output": {
+          "type": "string",
+          "description": "Directory the generator writes into. Agents treat changes here as generated output, never as hand-written code."
+        }
+      }
+    },
+
+    "agents": {
+      "type": "object",
+      "description": "Per-repository overrides for the agentic workflows. Every field is optional; omitting the block accepts the toolbox defaults.",
+      "additionalProperties": false,
+      "properties": {
+        "binding-updater": { "$ref": "#/$defs/agentOverride" },
+        "ci-doctor": { "$ref": "#/$defs/agentOverride" }
+      }
+    }
+  },
+
+  "$defs": {
+    "agentOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "model": {
+          "type": "string",
+          "description": "Copilot model id. Overrides the toolbox default for this repository."
+        },
+        "max-ai-credits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Hard spending ceiling for a single run, in GitHub AI Credits (1 credit = $0.01)."
+        }
+      }
+    }
+  }
+}

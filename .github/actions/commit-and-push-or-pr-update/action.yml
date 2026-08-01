@@ -1,0 +1,77 @@
+name: Commit and PR XML Update
+description: Stage, commit, push and/or create PR for XML or standards updates.
+inputs:
+  commit_message:
+    description: Commit message to use
+    required: true
+  mode:
+    description: 'auto (push then PR if needed) or pr (always PR)'
+    required: false
+    default: 'auto'
+  labels:
+    description: 'Comma-separated list of labels for the PR (optional)'
+    required: false
+    default: ''
+  pr_branch_name:
+    description: 'Branch name for the PR (optional)'
+    required: false
+    default: 'chore/sync-standards'
+  pr_title:
+    description: 'Title for the PR (optional)'
+    required: false
+    default: 'Sync standards'
+  pr_body:
+    description: 'Body for the PR (optional)'
+    required: false
+    default: 'Automated update of shared standard files.'
+runs:
+  using: "composite"
+  steps:
+    - name: Stage changes
+      shell: pwsh
+      run: |
+        git add -A
+        git diff --cached --quiet
+        if ($LASTEXITCODE -eq 0) {
+          echo "CHANGES=false" >> $env:GITHUB_ENV
+        } else {
+          echo "CHANGES=true" >> $env:GITHUB_ENV
+        }
+        exit 0
+        
+      # https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-using-the-built-in-token 
+    - name: Commit (if any)
+      if: env.CHANGES == 'true'
+      shell: pwsh
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -m "${{ inputs.commit_message }}"
+
+    - name: Try direct push
+      if: env.CHANGES == 'true' && inputs.mode == 'auto' && github.event.repository.fork != true
+      id: direct
+      shell: pwsh
+      continue-on-error: true
+      run: |
+        git push
+        echo "exit_code=$LASTEXITCODE" >> $env:GITHUB_OUTPUT
+        exit 0
+
+    - name: Create Pull Request
+      if: >
+        env.CHANGES == 'true' && (
+          inputs.mode == 'pr' ||
+          github.event.repository.fork == true ||
+          steps.direct.outcome == 'failure' ||
+          steps.direct.outputs.exit_code != '' && steps.direct.outputs.exit_code != '0'
+        )
+      uses: peter-evans/create-pull-request@v7
+      with:
+        branch: ${{ inputs.pr_branch_name }}
+        title: ${{ inputs.pr_title }}
+        body: ${{ inputs.pr_body }}
+        commit-message: "${{ inputs.commit_message }}"
+        labels: ${{ inputs.labels }}
+        signoff: false
+        delete-branch: true
