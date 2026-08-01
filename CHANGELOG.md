@@ -4,6 +4,14 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.1.2] - 2026-08-02
+
+### Fixed
+
+- **Corrected the model identifiers.** `claude-opus-4.6` and `claude-sonnet-4.6` are rejected at runtime: the AWF binary the compiled workflows run (`0.27.42`) carries a shorter model catalog than the `gh aw` CLI does, so `gh aw compile --strict` accepts a name the runner then refuses. The updater now uses `claude-opus-4.8`, which AWF named itself in its error, and the doctor uses `claude-sonnet-5`.
+
+  Worth knowing for future model changes: compile-time validation does **not** prove a model will resolve at run time. The failure is at least loud and free — AWF rejects the name in the first seconds of the agent step, before any tokens are spent.
+
 ## [1.1.1] - 2026-08-02
 
 ### Fixed

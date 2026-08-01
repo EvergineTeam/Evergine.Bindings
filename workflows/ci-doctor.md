@@ -17,7 +17,7 @@ permissions:
   pull-requests: read
   copilot-requests: write
 strict: true
-model: claude-sonnet-4.6
+model: claude-sonnet-5
 max-turns: 25
 max-ai-credits: 150
 network:

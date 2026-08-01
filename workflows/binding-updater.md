@@ -15,7 +15,7 @@ permissions:
   pull-requests: read
   copilot-requests: write
 strict: true
-model: claude-opus-4.6
+model: claude-opus-4.8
 max-turns: 60
 max-ai-credits: 600
 network:
