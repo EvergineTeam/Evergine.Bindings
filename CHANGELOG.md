@@ -4,6 +4,21 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.2.0] - 2026-08-02
+
+Acts on what the first real pilot run measured. It succeeded and cost 46 AI Credits ($0.46), but `gh aw audit` flagged that 93% of its 32 turns were data-gathering a script could do, and that the firewall had blocked a domain the agent then had to reason about.
+
+### Added
+
+- **`binding-fetch-upstream` composite action.** Reads `binding.yml`, fetches every declared source through the adapter named by `upstream.kind`, writes the new content into the working tree, and leaves a one-screen report at `/tmp/gh-aw/agent/upstream-report.md`. Whether a vendored file differs from upstream is a byte comparison; having a model discover that costs turns and reaches the same answer.
+
+  The `git-submodule` adapter deliberately compares the recorded SHA against upstream **without checking anything out**. In KTX.NET a pointer bump means rebuilding native binaries, and in ImGui.Net it means moving four interdependent modules as a compatible set — so that adapter reports and stops.
+
+### Changed
+
+- **`binding-updater` step 2 now reads the report instead of doing the fetching.** The prompt tells it explicitly not to re-download or re-check: the comparison was a hash and is not improved by a second opinion.
+- **Opted the dotnet CLI out of telemetry** (`DOTNET_CLI_TELEMETRY_OPTOUT`, `DOTNET_NOLOGO`) rather than adding `dc.services.visualstudio.com` to the firewall allow-list. The agent should not be widening its own network boundary for telemetry.
+
 ## [1.1.3] - 2026-08-02
 
 ### Changed

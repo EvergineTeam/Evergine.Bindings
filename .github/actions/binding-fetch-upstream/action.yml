@@ -1,0 +1,44 @@
+name: "Fetch binding upstream"
+description: >
+  Reads binding.yml, fetches the declared upstream sources using the adapter named by
+  upstream.kind, and reports whether anything changed. Deterministic on purpose: deciding
+  whether a file differs is a byte comparison, not a reasoning task, and doing it here
+  keeps it out of the agent's turn count.
+
+inputs:
+  manifest:
+    description: "Path to the binding manifest"
+    required: false
+    default: "binding.yml"
+  report-path:
+    description: "Where to write the human-readable report the agent reads"
+    required: false
+    default: "/tmp/gh-aw/agent/upstream-report.md"
+  github-token:
+    description: "Token used to read upstream repositories for the git-tree adapter"
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  changed:
+    description: "true when at least one source differs from the vendored copy"
+    value: ${{ steps.fetch.outputs.changed }}
+  report:
+    description: "Path to the written report"
+    value: ${{ steps.fetch.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch upstream sources
+      id: fetch
+      shell: bash
+      env:
+        MANIFEST: ${{ inputs.manifest }}
+        REPORT_PATH: ${{ inputs.report-path }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
+        mkdir -p "$(dirname "$REPORT_PATH")"
+        python3 "$GITHUB_ACTION_PATH/fetch_upstream.py"
