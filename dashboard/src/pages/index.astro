@@ -1,0 +1,77 @@
+---
+import Base from "../layouts/Base.astro";
+import Rail from "../components/Rail.astro";
+import Runs from "../components/Runs.astro";
+import data from "../data/agents-data.json";
+import { money, daysSince, STALE_DAYS } from "../lib/format";
+
+const t: any = data.totals;
+
+// A package nobody has republished in two months is either finished or forgotten,
+// and the dashboard cannot tell the difference — so it says how many there are and
+// lets a person decide.
+const stale = data.repos.filter((r: any) => {
+  const age = daysSince(r.package?.published);
+  return age !== null && age > STALE_DAYS;
+});
+
+const tiles = [
+  { k: "Repositories", v: t.repos, s: `${t.with_manifest} with a manifest` },
+  { k: "Running agents", v: t.with_agents, s: `of ${t.repos} in the fleet` },
+  { k: "Agent runs", v: t.agent_runs, s: `last ${data.window_days} days` },
+  { k: "AI Credits", v: t.credits, s: money(t.cost) },
+  {
+    k: "Agent PRs",
+    v: t.prs_merged + t.prs_open + t.prs_rejected,
+    s: `${t.prs_merged} merged · ${t.prs_rejected} rejected`,
+  },
+  {
+    k: "Silent failures",
+    v: t.silent_failures,
+    s: "red with nobody on it",
+    cls: t.silent_failures ? "bad" : "good",
+  },
+  {
+    k: "Stale packages",
+    v: stale.length,
+    s: `no release in ${STALE_DAYS}+ days`,
+    cls: stale.length ? "warn" : "good",
+  },
+];
+---
+<Base title="Evergine Bindings — fleet status">
+  <p class="lede">
+    {data.totals.repos} binding repositories. Pick one to see what its agents have been doing.
+  </p>
+
+  <h2>Fleet</h2>
+  <Rail />
+
+  <h2>Health</h2>
+  <div class="tiles">
+    {tiles.map((x) => (
+      <div class="tile">
+        <div class="k">{x.k}</div>
+        <div class:list={["v", x.cls]}>{x.v}</div>
+        <div class="s">{x.s}</div>
+      </div>
+    ))}
+  </div>
+
+  {stale.length > 0 && (
+    <>
+      <h2>Not publishing</h2>
+      <div class="empty" style="text-align:left">
+        {stale.length} of {data.repos.length} repositories have not published in over {STALE_DAYS} days:
+        <strong> {stale.map((r: any) => r.repo).join(", ")}</strong>.
+        <br /><br />
+        Worth knowing why before reading it as neglect: only the XML-driven bindings run their
+        CD on a schedule. The rest publish when somebody dispatches the workflow by hand, so a
+        gap here means nobody pressed the button, not that a job failed.
+      </div>
+    </>
+  )}
+
+  <h2>Recent agent activity</h2>
+  <Runs runs={data.runs} />
+</Base>

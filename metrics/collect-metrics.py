@@ -21,7 +21,7 @@ from pathlib import Path
 
 ORG = os.environ.get("FLEET_ORG", "EvergineTeam")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
-OUT = Path(os.environ.get("OUT", "dashboard/agents-data.json"))
+OUT = Path(os.environ.get("OUT", "dashboard/src/data/agents-data.json"))
 # How far back to look. Ninety days covers three monthly cycles, which is the
 # shortest window in which "did the monthly job run" is answerable.
 WINDOW_DAYS = int(os.environ.get("WINDOW_DAYS", "90"))

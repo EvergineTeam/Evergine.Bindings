@@ -1,0 +1,95 @@
+---
+import Base from "../../layouts/Base.astro";
+import Rail from "../../components/Rail.astro";
+import Runs from "../../components/Runs.astro";
+import data from "../../data/agents-data.json";
+import { slug, money, when, daysSince, freshnessClass } from "../../lib/format";
+
+// One route per binding, generated at build time. Because these are real pages
+// the rail is a set of links and the site ships no client-side JavaScript.
+export function getStaticPaths() {
+  return data.repos.map((r: any) => ({
+    params: { repo: slug(r.repo) },
+    props: { info: r, runs: data.runs.filter((x: any) => x.repo === r.repo) },
+  }));
+}
+
+const { info, runs } = Astro.props as { info: any; runs: any[] };
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const credits = runs.reduce((a, r) => a + (r.credits ?? 0), 0);
+const age = daysSince(info.package?.published);
+const WATCHED = ["CI", "CD", "Sync standards"];
+
+const tiles = [
+  { k: "NuGet", v: info.package?.version ?? "—", s: info.package?.id ?? "not published" },
+  {
+    k: "Freshness", v: age !== null ? `${age}d` : "—",
+    s: "since last release", cls: freshnessClass(age),
+  },
+  { k: "Agent runs", v: runs.length, s: `${credits.toFixed(2)} credits · ${money(credits * 0.01)}` },
+  {
+    k: "Agent PRs", v: info.prs.total,
+    s: `${info.prs.merged} merged · ${info.prs.open} open · ${info.prs.closed_unmerged} rejected`,
+  },
+  { k: "Needs a human", v: info.open_issues, s: "open agent issues", cls: info.open_issues ? "warn" : "" },
+  {
+    k: "Silent failures", v: info.silent_failures, s: "red with nobody on it",
+    cls: info.silent_failures ? "bad" : "good",
+  },
+];
+---
+<Base title={`${info.repo} — Evergine Bindings`}>
+  <p class="lede">
+    <a class="back" href={`${base}/`}>← whole fleet</a>
+  </p>
+
+  <h2>Fleet</h2>
+  <Rail current={info.repo} />
+
+  <h2>{info.repo}</h2>
+  <div class="tiles">
+    {tiles.map((x) => (
+      <div class="tile">
+        <div class="k">{x.k}</div>
+        <div class:list={["v", x.cls]}>{x.v}</div>
+        <div class="s">{x.s}</div>
+      </div>
+    ))}
+  </div>
+
+  <h2>Pipelines</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Workflow</th><th>Last result</th><th>When</th><th></th></tr></thead>
+      <tbody>
+        {WATCHED.map((w) => {
+          const p = info.pipeline?.[w];
+          return (
+            <tr>
+              <td>{w}</td>
+              <td>
+                {p
+                  ? <span class:list={["pill", ["success","failure"].includes(p.conclusion) ? p.conclusion : "other"]}>{p.conclusion ?? "running"}</span>
+                  : <span class="pill other">no runs</span>}
+              </td>
+              <td>{p ? when(p.at) : "—"}</td>
+              <td>{p && <a href={p.url}>run ↗</a>}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+
+  {!info.has_manifest && (
+    <div class="empty" style="text-align:left;margin-top:12px">
+      No <code>binding.yml</code> in this repository yet, so its upstream source is not
+      declared anywhere a machine can read. The agents need that manifest before they can
+      maintain it.
+    </div>
+  )}
+
+  <h2>Agent runs</h2>
+  <Runs runs={runs} showRepo={false} scope={info.repo} />
+</Base>

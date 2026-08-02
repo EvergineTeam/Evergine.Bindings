@@ -53,11 +53,21 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
           FLEET_ORG: ${{ github.repository_owner }}
-          OUT: dashboard/agents-data.json
+          OUT: dashboard/src/data/agents-data.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Build the site
+        run: npm ci && npm run build
+        working-directory: dashboard
 
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: dashboard
+          path: dashboard/dist
 
   deploy:
     needs: build
