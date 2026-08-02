@@ -1,0 +1,86 @@
+:root {
+  --bg: #0b0c0e; --panel: #141619; --line: #24272c;
+  --ink: #e7e9ea; --dim: #8b9199;
+  --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444; --idle: #71717a;
+  /* Per-agent hues, kept consistent with the FrameStudio panel so the two
+     dashboards read as the same family. */
+  --updater: #3b82f6; --doctor: #06b6d4; --toolbox: #a855f7;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f7f8f9; --panel: #fff; --line: #e3e6ea; --ink: #14161a; --dim: #5c636b; }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 26px 20px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
+h1 a { text-decoration: none; }
+.stamp { color: var(--dim); font-size: 12px; }
+.lede { color: var(--dim); margin: 6px 0 0; }
+h2 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--dim); margin: 30px 0 12px; font-weight: 600;
+}
+
+/* Rail: one card per binding. Plain links, so no client-side JavaScript. */
+.rail { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 12px; scroll-snap-type: x mandatory; }
+.rail::-webkit-scrollbar { height: 8px; }
+.rail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+.card {
+  flex: 0 0 196px; scroll-snap-align: start; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  text-decoration: none; transition: transform .15s, border-color .15s;
+}
+.card:hover { transform: translateY(-2px); border-color: var(--dim); }
+.card.current { border-color: var(--updater); box-shadow: 0 0 0 1px var(--updater); }
+.card .name { font-weight: 600; font-size: 13px; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lights { display: flex; gap: 5px; margin-bottom: 8px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--idle); }
+.dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+.meta { color: var(--dim); font-size: 11.5px; line-height: 1.5; }
+.meta .ok { color: var(--ok); } .meta .warn { color: var(--warn); } .meta .bad { color: var(--bad); }
+.badge {
+  display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 99px;
+  border: 1px solid var(--line); color: var(--dim); margin-top: 6px;
+}
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 10px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.tile .k { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.tile .v { font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.tile .s { color: var(--dim); font-size: 11.5px; margin-top: 2px; }
+.v.good { color: var(--ok); } .v.bad { color: var(--bad); } .v.warn { color: var(--warn); }
+
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; color: var(--dim); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .06em; padding: 7px 10px;
+  border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+td { padding: 8px 10px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; font-weight: 500; }
+.pill.success { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.pill.failure { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.pill.other { background: color-mix(in srgb, var(--idle) 22%, transparent); color: var(--dim); }
+.agent { font-weight: 500; }
+.agent.updater { color: var(--updater); }
+.agent.doctor { color: var(--doctor); }
+.agent.toolbox { color: var(--toolbox); }
+
+.empty {
+  color: var(--dim); padding: 26px; text-align: center; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; line-height: 1.7;
+}
+footer { margin-top: 34px; color: var(--dim); font-size: 11.5px; line-height: 1.7; }
+.back { color: var(--dim); text-decoration: none; font-size: 12px; }
+.back:hover { color: var(--ink); }

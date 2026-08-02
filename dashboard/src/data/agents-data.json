@@ -1,0 +1,503 @@
+{
+ "generated_at": "2026-08-02T09:12:01.739900+00:00",
+ "org": "EvergineTeam",
+ "window_days": 90,
+ "repos": [
+  {
+   "repo": "Vulkan.NET",
+   "has_manifest": true,
+   "has_agents": true,
+   "pipeline": {
+    "CD": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:38:41Z",
+     "url": "https://github.com/EvergineTeam/Vulkan.NET/actions/runs/30719571791"
+    },
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-02T09:04:31Z",
+     "url": "https://github.com/EvergineTeam/Vulkan.NET/actions/runs/30741035876"
+    },
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-08-01T12:23:14Z",
+     "url": "https://github.com/EvergineTeam/Vulkan.NET/actions/runs/30699586275"
+    }
+   },
+   "package": {
+    "id": "Evergine.Bindings.Vulkan",
+    "version": "2026.8.1.21",
+    "published": "2026-08-01T00:00:00+00:00"
+   },
+   "prs": {
+    "total": 2,
+    "merged": 0,
+    "open": 1,
+    "closed_unmerged": 1
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "OpenXR.NET",
+   "has_manifest": true,
+   "has_agents": false,
+   "pipeline": {
+    "CD": {
+     "conclusion": null,
+     "at": "2026-08-01T21:41:55Z",
+     "url": "https://github.com/EvergineTeam/OpenXR.NET/actions/runs/30719681945"
+    },
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:41:54Z",
+     "url": "https://github.com/EvergineTeam/OpenXR.NET/actions/runs/30719681356"
+    },
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-08-01T01:33:38Z",
+     "url": "https://github.com/EvergineTeam/OpenXR.NET/actions/runs/30678173524"
+    }
+   },
+   "package": {
+    "id": "Evergine.Bindings.OpenXR",
+    "version": "2026.8.1.16",
+    "published": "2026-08-01T00:00:00+00:00"
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "OpenGL.NET",
+   "has_manifest": false,
+   "has_agents": false,
+   "pipeline": {
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T12:30:57Z",
+     "url": "https://github.com/EvergineTeam/OpenGL.NET/actions/runs/30699849702"
+    },
+    "Sync standards": {
+     "conclusion": null,
+     "at": "2026-08-01T12:32:13Z",
+     "url": "https://github.com/EvergineTeam/OpenGL.NET/actions/runs/30699893981"
+    }
+   },
+   "package": {
+    "id": null,
+    "version": null,
+    "published": null
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "WebGPU.NET",
+   "has_manifest": true,
+   "has_agents": false,
+   "pipeline": {
+    "CD": {
+     "conclusion": "success",
+     "at": "2026-08-01T22:11:04Z",
+     "url": "https://github.com/EvergineTeam/WebGPU.NET/actions/runs/30720715318"
+    },
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T22:11:03Z",
+     "url": "https://github.com/EvergineTeam/WebGPU.NET/actions/runs/30720714748"
+    },
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-08-01T12:34:33Z",
+     "url": "https://github.com/EvergineTeam/WebGPU.NET/actions/runs/30699971151"
+    }
+   },
+   "package": {
+    "id": "Evergine.Bindings.WebGPU",
+    "version": "2026.3.31.26",
+    "published": "2026-03-31T00:00:00+00:00"
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "KTX.NET",
+   "has_manifest": true,
+   "has_agents": false,
+   "pipeline": {
+    "CD": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:49:06Z",
+     "url": "https://github.com/EvergineTeam/KTX.NET/actions/runs/30719936415"
+    },
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:48:50Z",
+     "url": "https://github.com/EvergineTeam/KTX.NET/actions/runs/30719927730"
+    },
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-08-01T03:03:17Z",
+     "url": "https://github.com/EvergineTeam/KTX.NET/actions/runs/30681219915"
+    }
+   },
+   "package": {
+    "id": "Evergine.Bindings.KTX",
+    "version": "2026.6.15.8",
+    "published": "2026-06-15T00:00:00+00:00"
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "ImGui.Net",
+   "has_manifest": false,
+   "has_agents": false,
+   "pipeline": {
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-08-01T01:39:08Z",
+     "url": "https://github.com/EvergineTeam/ImGui.Net/actions/runs/30678374244"
+    }
+   },
+   "package": {
+    "id": null,
+    "version": null,
+    "published": null
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "xatlas.NET",
+   "has_manifest": true,
+   "has_agents": false,
+   "pipeline": {
+    "CD": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:49:08Z",
+     "url": "https://github.com/EvergineTeam/xatlas.NET/actions/runs/30719937641"
+    },
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:48:54Z",
+     "url": "https://github.com/EvergineTeam/xatlas.NET/actions/runs/30719929814"
+    },
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-07-01T01:43:11Z",
+     "url": "https://github.com/EvergineTeam/xatlas.NET/actions/runs/28487715815"
+    }
+   },
+   "package": {
+    "id": "Evergine.Bindings.XAtlas",
+    "version": "2026.4.2.9",
+    "published": "2026-04-02T00:00:00+00:00"
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "Meshoptimizer.NET",
+   "has_manifest": true,
+   "has_agents": false,
+   "pipeline": {
+    "CD": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:49:10Z",
+     "url": "https://github.com/EvergineTeam/Meshoptimizer.NET/actions/runs/30719938874"
+    },
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:48:58Z",
+     "url": "https://github.com/EvergineTeam/Meshoptimizer.NET/actions/runs/30719931850"
+    },
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-08-01T01:35:23Z",
+     "url": "https://github.com/EvergineTeam/Meshoptimizer.NET/actions/runs/30678240404"
+    }
+   },
+   "package": {
+    "id": "Evergine.Bindings.MeshOptimizer",
+    "version": "2026.4.1.13",
+    "published": "2026-04-01T00:00:00+00:00"
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "RenderDoc.NET",
+   "has_manifest": false,
+   "has_agents": false,
+   "pipeline": {
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T12:31:01Z",
+     "url": "https://github.com/EvergineTeam/RenderDoc.NET/actions/runs/30699851809"
+    },
+    "Sync standards": {
+     "conclusion": null,
+     "at": "2026-08-01T12:32:15Z",
+     "url": "https://github.com/EvergineTeam/RenderDoc.NET/actions/runs/30699895044"
+    }
+   },
+   "package": {
+    "id": null,
+    "version": null,
+    "published": null
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "JoltPhysics.NET",
+   "has_manifest": true,
+   "has_agents": false,
+   "pipeline": {
+    "CD": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:49:12Z",
+     "url": "https://github.com/EvergineTeam/JoltPhysics.NET/actions/runs/30719940079"
+    },
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:49:01Z",
+     "url": "https://github.com/EvergineTeam/JoltPhysics.NET/actions/runs/30719933625"
+    },
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-08-01T01:40:15Z",
+     "url": "https://github.com/EvergineTeam/JoltPhysics.NET/actions/runs/30678414846"
+    }
+   },
+   "package": {
+    "id": "Evergine.Bindings.JoltPhysics",
+    "version": "2026.4.4.7",
+    "published": "2026-04-04T00:00:00+00:00"
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  },
+  {
+   "repo": "Cesium.NET",
+   "has_manifest": true,
+   "has_agents": false,
+   "pipeline": {
+    "CD": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:49:14Z",
+     "url": "https://github.com/EvergineTeam/Cesium.NET/actions/runs/30719941434"
+    },
+    "CI": {
+     "conclusion": "success",
+     "at": "2026-08-01T21:49:05Z",
+     "url": "https://github.com/EvergineTeam/Cesium.NET/actions/runs/30719935892"
+    },
+    "Sync standards": {
+     "conclusion": "success",
+     "at": "2026-08-01T01:36:16Z",
+     "url": "https://github.com/EvergineTeam/Cesium.NET/actions/runs/30678273166"
+    }
+   },
+   "package": {
+    "id": "Evergine.Bindings.CesiumNative",
+    "version": "2026.7.20.14",
+    "published": "2026-07-20T00:00:00+00:00"
+   },
+   "prs": {
+    "total": 0,
+    "merged": 0,
+    "open": 0,
+    "closed_unmerged": 0
+   },
+   "open_issues": 0,
+   "silent_failures": 0
+  }
+ ],
+ "runs": [
+  {
+   "ts": "2026-08-02T09:05:02Z",
+   "repo": "Vulkan.NET",
+   "agent": "CI Doctor",
+   "status": "skipped",
+   "issue": 0,
+   "duration_s": 2.0,
+   "iterations": 0,
+   "tokens": 0,
+   "credits": 0,
+   "cost": 0.0,
+   "model": null
+  },
+  {
+   "ts": "2026-08-02T08:54:38Z",
+   "repo": "Vulkan.NET",
+   "agent": "Binding Updater",
+   "status": "failure",
+   "issue": 0,
+   "duration_s": 175.0,
+   "iterations": 0,
+   "tokens": 0,
+   "credits": 0,
+   "cost": 0.0,
+   "model": "claude-opus-4.6"
+  },
+  {
+   "ts": "2026-08-02T08:45:13Z",
+   "repo": "Vulkan.NET",
+   "agent": "Binding Updater",
+   "status": "success",
+   "issue": 0,
+   "duration_s": 449.0,
+   "iterations": 35,
+   "tokens": 1391415,
+   "credits": 52.26,
+   "cost": 0.5226,
+   "model": "claude-sonnet-5"
+  },
+  {
+   "ts": "2026-08-02T08:12:51Z",
+   "repo": "Vulkan.NET",
+   "agent": "Binding Updater",
+   "status": "success",
+   "issue": 0,
+   "duration_s": 406.0,
+   "iterations": 32,
+   "tokens": 1281727,
+   "credits": 46.03,
+   "cost": 0.4603,
+   "model": "claude-sonnet-5"
+  },
+  {
+   "ts": "2026-08-02T06:55:26Z",
+   "repo": "Vulkan.NET",
+   "agent": "Binding Updater",
+   "status": "failure",
+   "issue": 0,
+   "duration_s": 1893.0,
+   "iterations": 0,
+   "tokens": 0,
+   "credits": 0,
+   "cost": 0.0,
+   "model": "claude-sonnet-5"
+  },
+  {
+   "ts": "2026-08-01T23:19:47Z",
+   "repo": "Vulkan.NET",
+   "agent": "Binding Updater",
+   "status": "failure",
+   "issue": 0,
+   "duration_s": 1412.0,
+   "iterations": 0,
+   "tokens": 0,
+   "credits": 0,
+   "cost": 0.0,
+   "model": "claude-opus-4.8"
+  },
+  {
+   "ts": "2026-08-01T23:13:30Z",
+   "repo": "Vulkan.NET",
+   "agent": "CI Doctor",
+   "status": "skipped",
+   "issue": 0,
+   "duration_s": 2.0,
+   "iterations": 0,
+   "tokens": 0,
+   "credits": 0,
+   "cost": 0.0,
+   "model": null
+  },
+  {
+   "ts": "2026-08-01T23:13:21Z",
+   "repo": "Vulkan.NET",
+   "agent": "Binding Updater",
+   "status": "failure",
+   "issue": 0,
+   "duration_s": 193.0,
+   "iterations": 0,
+   "tokens": 0,
+   "credits": 0,
+   "cost": 0.0,
+   "model": "claude-opus-4.6"
+  },
+  {
+   "ts": "2026-08-01T23:09:20Z",
+   "repo": "Vulkan.NET",
+   "agent": "CI Doctor",
+   "status": "skipped",
+   "issue": 0,
+   "duration_s": 2.0,
+   "iterations": 0,
+   "tokens": 0,
+   "credits": 0,
+   "cost": 0.0,
+   "model": null
+  }
+ ],
+ "totals": {
+  "repos": 11,
+  "with_agents": 1,
+  "with_manifest": 8,
+  "agent_runs": 9,
+  "credits": 98.29,
+  "cost": 0.98,
+  "silent_failures": 0,
+  "prs_merged": 0,
+  "prs_open": 1,
+  "prs_rejected": 1
+ }
+}

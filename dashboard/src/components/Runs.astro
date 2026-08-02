@@ -1,0 +1,47 @@
+---
+import { num, duration, when } from "../lib/format";
+
+interface Props { runs: any[]; showRepo?: boolean; scope?: string }
+const { runs, showRepo = true, scope } = Astro.props;
+
+const AGENT_CLASS: Record<string, string> = {
+  "Binding Updater": "updater",
+  "CI Doctor": "doctor",
+  "Toolbox Updater": "toolbox",
+};
+const pill = (s: string) => (["success", "failure"].includes(s) ? s : "other");
+---
+{runs.length === 0 ? (
+  <div class="empty">
+    No agent runs recorded{scope ? ` for ${scope}` : ""} in this window.<br />
+    Expected until the agents are installed and something wakes them.
+  </div>
+) : (
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>When</th>
+          {showRepo && <th>Repo</th>}
+          <th>Agent</th><th>Result</th><th>Model</th>
+          <th>Turns</th><th>Tokens</th><th>Credits</th><th>Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {runs.slice(0, 60).map((r) => (
+          <tr>
+            <td>{when(r.ts)}</td>
+            {showRepo && <td>{r.repo}</td>}
+            <td class:list={["agent", AGENT_CLASS[r.agent]]}>{r.agent}</td>
+            <td><span class:list={["pill", pill(r.status)]}>{r.status}</span></td>
+            <td>{r.model ?? "—"}</td>
+            <td>{r.iterations || "—"}</td>
+            <td>{num(r.tokens)}</td>
+            <td>{r.credits != null ? r.credits.toFixed(2) : "—"}</td>
+            <td>{duration(r.duration_s)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}

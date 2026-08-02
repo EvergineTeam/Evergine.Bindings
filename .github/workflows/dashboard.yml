@@ -1,0 +1,80 @@
+name: Dashboard
+
+# Rebuilds the fleet dashboard and publishes it to GitHub Pages.
+#
+# Read-only with respect to the binding repositories: every figure is pulled from
+# the GitHub API, from `gh aw audit`, or from nuget.org. No binding has to commit
+# a metrics file for it to appear here.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # daily, early enough to reflect overnight scheduled runs
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - dashboard/**
+      - metrics/collect-metrics.py
+      - .github/workflows/dashboard.yml
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --quiet pyyaml
+
+      - name: Install gh-aw
+        # The AI Credit figures come from `gh aw audit`; the Actions API does not
+        # expose them.
+        run: gh extension install github/gh-aw
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Collect metrics
+        run: python metrics/collect-metrics.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          FLEET_ORG: ${{ github.repository_owner }}
+          OUT: dashboard/src/data/agents-data.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Build the site
+        run: npm ci && npm run build
+        working-directory: dashboard
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dashboard/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

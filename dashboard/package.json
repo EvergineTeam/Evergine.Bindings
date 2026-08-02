@@ -1,0 +1,13 @@
+{
+  "name": "evergine-bindings-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "devDependencies": {
+    "astro": "^5.16.2"
+  }
+}

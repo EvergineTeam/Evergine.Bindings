@@ -1,0 +1,37 @@
+---
+import data from "../data/agents-data.json";
+import { slug, daysSince, freshnessClass } from "../lib/format";
+
+interface Props { current?: string }
+const { current } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const WATCHED = ["CI", "CD", "Sync standards"];
+const light = (c: string | null | undefined) =>
+  !c ? "" : c === "success" ? "ok" : c === "failure" ? "bad" : "warn";
+---
+<div class="rail">
+  {data.repos.map((r: any) => {
+    const age = daysSince(r.package?.published);
+    return (
+      <a class:list={["card", { current: current === r.repo }]} href={`${base}/b/${slug(r.repo)}/`}>
+        <div class="name">{r.repo}</div>
+        <div class="lights">
+          {WATCHED.map((w) => (
+            <span
+              class:list={["dot", light(r.pipeline?.[w]?.conclusion)]}
+              title={`${w}: ${r.pipeline?.[w]?.conclusion ?? "no runs in window"}`}
+            />
+          ))}
+        </div>
+        <div class="meta">
+          {r.package?.version ? <>NuGet <strong>{r.package.version}</strong></> : <>no package</>}<br />
+          {age !== null
+            ? <span class={freshnessClass(age)}>published {age}d ago</span>
+            : <>&nbsp;</>}
+        </div>
+        {r.has_agents && <span class="badge">agents</span>}
+      </a>
+    );
+  })}
+</div>
