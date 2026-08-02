@@ -250,11 +250,17 @@ def collect_repo(repo, since, releases, current_agents):
         if info["conclusion"] not in ("success", None) and not open_agent_issues
     )
 
+    toolbox = toolbox_state(repo, releases, current_agents)
+
     return {
         "repo": repo,
         "has_manifest": manifest is not None,
-        "toolbox": toolbox_state(repo, releases, current_agents),
-        "has_agents": bool(agent_runs),
+        "toolbox": toolbox,
+        # Derived from the installed workflow, not from run history: a repository
+        # that has the agents but has not woken them yet still has them. Reading
+        # runs made a freshly-installed repo look empty, which is exactly when
+        # someone is most likely to be checking.
+        "has_agents": toolbox is not None,
         "pipeline": pipeline,
         "package": {"id": package_id, "version": nuget_version, "published": nuget_date},
         "prs": {
