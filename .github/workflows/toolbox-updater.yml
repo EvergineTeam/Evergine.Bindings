@@ -27,18 +27,21 @@ on:
         required: false
         type: string
         default: 'v1'
+      app-client-id:
+        description: 'Client ID of the GitHub App that owns the push'
+        required: true
+        type: string
       runner-os:
         description: 'GitHub runner OS'
         required: false
         type: string
         default: 'ubuntu-latest'
     secrets:
-      WORKFLOW_TOKEN:
+      APP_PRIVATE_KEY:
         description: >-
-          Token with `workflow` scope. Required: GITHUB_TOKEN cannot push changes
-          under .github/workflows/, so without this the push is rejected. A
-          fine-grained PAT with Contents and Pull requests write, or a GitHub App
-          installation token, both work.
+          Private key of the GitHub App that owns the push. GITHUB_TOKEN cannot
+          write under .github/workflows/ -- that permission is App-only -- so
+          without this the push is rejected.
         required: true
 
 permissions:
@@ -48,10 +51,20 @@ jobs:
   update:
     runs-on: ${{ inputs.runner-os }}
     steps:
+      # An installation token rather than a PAT: it is owned by the organisation
+      # rather than by a person, expires in an hour, and does not need renewing
+      # every year.
+      - name: Mint an App installation token
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ inputs.app-client-id }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          token: ${{ secrets.WORKFLOW_TOKEN }}
+          token: ${{ steps.app.outputs.token }}
 
       - name: Install gh-aw
         env:
@@ -102,7 +115,7 @@ jobs:
         if: steps.check.outputs.outdated == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.WORKFLOW_TOKEN }}
+          token: ${{ steps.app.outputs.token }}
           branch: chore/toolbox-update
           delete-branch: true
           title: "chore: update agents to the current toolbox release"

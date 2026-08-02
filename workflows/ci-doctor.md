@@ -27,9 +27,16 @@ tools:
     mode: gh-proxy
     toolsets: [default]
 safe-outputs:
+  # The doctor's whole job is editing workflow configuration, and GITHUB_TOKEN
+  # may not write under .github/workflows/ -- that permission is App-only. Without
+  # this the pull request fails and degrades to an issue carrying a manual link.
+  github-app:
+    client-id: ${{ vars.APP_CLIENT_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
   create-pull-request:
     title-prefix: "fix(ci): "
     labels: [agent:ci-fix]
+    allow-workflows: true
     allowed-files:
       - ".github/workflows/**"
     draft: false
