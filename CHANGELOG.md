@@ -4,6 +4,24 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.6.0] - 2026-08-02
+
+### Added
+
+- **`toolbox-updater`** — keeps a binding's installed agents pinned to the current release. Compares the `source:` recorded in the installed workflows against the latest tag, and when they differ reinstalls, recompiles and opens a pull request.
+
+  Moving the `v1` tag updates nothing on its own: a repository keeps the commit it was compiled against until something recompiles it, and nothing fails in the meantime. Three of the four piloted repositories had already drifted four releases behind without a single red run.
+
+  **Deliberately not an agentic workflow.** Comparing two versions, running `gh aw add --force` and recompiling is entirely deterministic; there is nothing for a model to decide and inference would be waste. The original design had it as an agent — that was wrong on cost, and it also turns out to be impossible: `GITHUB_TOKEN` cannot hold the `workflows` permission, so an agent's `create-pull-request` cannot touch `.github/workflows/` without a configured GitHub App.
+
+### Fixed
+
+- **`has_agents` is derived from the installed workflow rather than from run history.** A repository with the agents installed but not yet woken counted as having none — which is exactly the moment someone is most likely to look. RenderDoc.NET showed as agent-free minutes after being set up.
+
+### Known limitation
+
+`ci-doctor` restricts its pull requests to `.github/workflows/**`, which is precisely what `GITHUB_TOKEN` may not write. Its pull request creation will fail and fall back to an issue containing a one-click link to open the change manually. Diagnosis still lands; the fix needs one click instead of none. Configuring `safe-outputs.github-app` in the toolbox removes the limitation for every repository at once.
+
 ## [1.5.1] - 2026-08-02
 
 ### Fixed

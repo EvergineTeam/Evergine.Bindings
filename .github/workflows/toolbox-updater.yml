@@ -1,0 +1,131 @@
+name: Toolbox Updater (Reusable)
+
+description: >
+  Keeps a binding's installed agentic workflows pinned to the current toolbox
+  release. Compares the `source:` recorded in the installed workflows against the
+  latest tag, and when they differ reinstalls and recompiles, opening a pull
+  request with the result.
+
+  Deliberately not an agentic workflow. Comparing two versions, running
+  `gh aw add --force` and recompiling is entirely deterministic -- there is
+  nothing here for a model to decide, and paying inference for it would be waste.
+
+  Moving the `v1` tag does not update anything on its own: a repository keeps the
+  commit it was compiled against until something recompiles it. This is that
+  something.
+
+on:
+  workflow_call:
+    inputs:
+      toolbox:
+        description: 'Toolbox package to track'
+        required: false
+        type: string
+        default: 'EvergineTeam/Evergine.Bindings'
+      ref:
+        description: 'Toolbox ref to install (the moving major tag by default)'
+        required: false
+        type: string
+        default: 'v1'
+      runner-os:
+        description: 'GitHub runner OS'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+    secrets:
+      WORKFLOW_TOKEN:
+        description: >-
+          Token with `workflow` scope. Required: GITHUB_TOKEN cannot push changes
+          under .github/workflows/, so without this the push is rejected. A
+          fine-grained PAT with Contents and Pull requests write, or a GitHub App
+          installation token, both work.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ${{ inputs.runner-os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      - name: Install gh-aw
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh extension install github/gh-aw
+
+      - name: Compare installed pin against the current release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Every installed workflow records where it came from. Any one of them
+          # answers the question, so read the first.
+          installed=$(grep -hm1 '^source:' .github/workflows/*.md 2>/dev/null \
+                      | sed 's/.*@//' || true)
+          if [ -z "$installed" ]; then
+            echo "No agentic workflows installed; nothing to update."
+            echo "outdated=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          latest=$(gh api "repos/${{ inputs.toolbox }}/commits/${{ inputs.ref }}" --jq .sha)
+          echo "installed: $installed"
+          echo "latest:    $latest"
+          if [ "$installed" = "$latest" ]; then
+            echo "Already on the current release."
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "outdated=true" >> "$GITHUB_OUTPUT"
+            echo "installed_sha=$installed" >> "$GITHUB_OUTPUT"
+            echo "latest_sha=$latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Reinstall and recompile
+        if: steps.check.outputs.outdated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh aw add "${{ inputs.toolbox }}@${{ inputs.ref }}" --force
+          # `gh aw add` regenerates the authoring scaffolding that binding
+          # repositories deliberately do not carry: workflows are written in the
+          # toolbox and only consumed here.
+          rm -rf .vscode .github/agents .github/skills .github/mcp.json \
+                 .github/workflows/copilot-setup-steps.yml .github/aw/logs
+          gh aw compile --strict
+
+      - name: Open a pull request
+        if: steps.check.outputs.outdated == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+          branch: chore/toolbox-update
+          delete-branch: true
+          title: "chore: update agents to the current toolbox release"
+          commit-message: |
+            chore: update agents to the current toolbox release
+
+            Repins the installed agentic workflows from
+            ${{ steps.check.outputs.installed_sha }} to
+            ${{ steps.check.outputs.latest_sha }} and recompiles.
+          labels: agent:toolbox-update
+          body: |
+            Repins the installed agentic workflows to the current
+            `${{ inputs.ref }}` of [`${{ inputs.toolbox }}`](https://github.com/${{ inputs.toolbox }}).
+
+            | | |
+            |---|---|
+            | Installed | `${{ steps.check.outputs.installed_sha }}` |
+            | Current | `${{ steps.check.outputs.latest_sha }}` |
+
+            Moving the toolbox tag does not update anything on its own — a
+            repository keeps the commit it was compiled against until something
+            recompiles it, and nothing fails in the meantime. That is what makes
+            the drift easy to accumulate and invisible without looking.
+
+            Review the diff as you would any workflow change: the compiled
+            `.lock.yml` files are generated, but the `.md` frontmatter is not.
