@@ -260,11 +260,15 @@ jobs:
         id: generated
         shell: pwsh
         run: |
-          $xmlPath = "${{ inputs.xml-path }}".Replace('\', '/')
-          # Everything dirty except the registry itself is generator output: the
-          # registry was overwritten by the download step a moment ago.
-          $dirty = @(git status --porcelain --untracked-files=all |
-                     Where-Object { $_.Substring(3).Replace('\', '/') -ne $xmlPath })
+          # Ask git what would actually be committed rather than what the tree
+          # looks like: `git status` is sensitive to line endings, so on a
+          # Windows runner every generated file reads as modified. Staging first
+          # applies the same normalisation the commit will.
+          git add -A
+          $xmlPath = "${{ inputs.xml-path }}".Replace([char]92,'/')
+          $dirty = @(git diff --cached --name-only | ForEach-Object {
+            $_.Trim().Replace([char]92,'/')
+          } | Where-Object { $_ -and $_ -ne $xmlPath })
           $changed = $dirty.Count -gt 0
           echo "generated_changed=$($changed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           if ($changed) {

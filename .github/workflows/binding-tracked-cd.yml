@@ -199,16 +199,24 @@ jobs:
         id: generated
         shell: pwsh
         run: |
-          # Everything dirty except the vendored sources is generator output: the
-          # sources were just overwritten by the fetch step. The path list comes
-          # from the action, which parsed the manifest properly, rather than from
-          # a regex over YAML in a shell.
+          # Ask git what would actually be committed, not what the working tree
+          # looks like. `git status` compares the tree against the index and is
+          # therefore sensitive to line endings: on a Windows runner, checkout
+          # writes CRLF while these files are stored as LF, so every generated
+          # file reads as modified even when the generator produced identical
+          # content. Staging first applies the same normalisation the commit
+          # will, so this answer cannot disagree with the commit step -- which is
+          # exactly what happened before: detection said three files changed and
+          # the commit found nothing to record.
+          git add -A
           $sources = @('${{ steps.upstream.outputs.paths }}'.Split("`n") |
                        ForEach-Object { $_.Trim().Replace([char]92,'/') } |
                        Where-Object { $_ })
-          $dirty = @(git status --porcelain --untracked-files=all | Where-Object {
-            $entry = $_.Substring(3).Replace([char]92,'/')
-            -not ($sources | Where-Object { $entry -eq $_ -or $entry.StartsWith("$_/") })
+          $dirty = @(git diff --cached --name-only | ForEach-Object {
+            $_.Trim().Replace([char]92,'/')
+          } | Where-Object {
+            $entry = $_
+            $entry -and -not ($sources | Where-Object { $entry -eq $_ -or $entry.StartsWith("$_/") })
           })
           $changed = $dirty.Count -gt 0
           echo "generated_changed=$($changed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
