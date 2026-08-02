@@ -1,0 +1,267 @@
+name: Binding API Gate (Reusable)
+
+description: >
+  Measures what a pull request does to the binding's public API surface, and
+  merges it automatically when the answer is "nothing anyone can notice".
+
+  The gate is the API delta, not the size of the diff. Those are not correlated
+  here and it is worth being explicit about why: the generator is a multiplier.
+  A 41-line change to OpenGLSpecification.cs once produced 12,368 insertions,
+  13,592 deletions and a batch of renamed public types. Any line-count threshold
+  would have called that small.
+
+  Two checks run, because neither is sufficient alone. ApiCompat is the authority
+  on binary compatibility -- base types, signatures, accessibility. It is blind to
+  an enum member whose name stays and whose value changes, which for a binding to
+  a native API is the most damaging break there is: the constant is inlined into
+  consumer code at compile time, so an already-built application keeps sending the
+  old number to the driver, with no error anywhere. The surface dump exists for
+  that case and reports every literal value.
+
+  Additive means every symbol that existed still exists, unchanged. New symbols
+  are free -- nothing that compiled before stops compiling.
+
+on:
+  workflow_call:
+    inputs:
+      binding-project:
+        description: 'Path to the binding .csproj whose public surface is the contract'
+        required: true
+        type: string
+      assembly-name:
+        description: 'Assembly file name without extension (defaults to the csproj name)'
+        required: false
+        type: string
+        default: ''
+      build-configuration:
+        required: false
+        type: string
+        default: 'Release'
+      dotnet-version:
+        required: false
+        type: string
+        default: '10.x'
+      runner-os:
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      toolbox-ref:
+        description: 'Toolbox ref to take the surface dumper from'
+        required: false
+        type: string
+        default: 'v1'
+      auto-merge:
+        description: >-
+          Merge the pull request when the verdict is additive. Opt-in: a
+          repository that only wants the measurement leaves this false.
+        required: false
+        type: boolean
+        default: false
+      agent-label:
+        description: 'Only pull requests carrying this label are eligible to merge'
+        required: false
+        type: string
+        default: 'agent:binding-update'
+      app-client-id:
+        description: 'Client ID of the GitHub App that owns the merge'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      APP_PRIVATE_KEY:
+        description: >-
+          Private key of the merging App. Merging with GITHUB_TOKEN would leave
+          no workflow runs on main, so CI would never confirm the merged result.
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gate:
+    runs-on: ${{ inputs.runner-os }}
+    outputs:
+      verdict: ${{ steps.diff.outputs.verdict }}
+      added: ${{ steps.diff.outputs.added }}
+      removed: ${{ steps.diff.outputs.removed }}
+    steps:
+      - name: Checkout the pull request
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Fetch the surface dumper from the toolbox
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .api-gate
+          gh api "repos/EvergineTeam/Evergine.Bindings/contents/tools/api-surface.cs?ref=${{ inputs.toolbox-ref }}" \
+            -H 'Accept: application/vnd.github.raw' > .api-gate/api-surface.cs
+
+      - name: Install ApiCompat
+        shell: bash
+        run: dotnet tool install --global Microsoft.DotNet.ApiCompat.Tool
+
+      # Both sides are built from source rather than taken from a published
+      # package: the question this gate answers is what merging *this* pull
+      # request does to the contract, not how far main has drifted from the last
+      # release.
+      - name: Build both sides and dump their surfaces
+        id: build
+        shell: bash
+        env:
+          PROJECT: ${{ inputs.binding-project }}
+          CONFIG: ${{ inputs.build-configuration }}
+          NAME: ${{ inputs.assembly-name }}
+        run: |
+          set -euo pipefail
+          [ -n "$NAME" ] || NAME=$(basename "$PROJECT" .csproj)
+          outdir=$(dirname "$PROJECT")/bin/$CONFIG
+
+          build_and_dump () {
+            local label="$1"
+            dotnet build "$PROJECT" -c "$CONFIG" -v q --nologo
+            mkdir -p ".api-gate/$label"
+            # Every target framework the project produces is compared. A binding
+            # that multi-targets can break one and not the other.
+            for dll in "$outdir"/*/"$NAME.dll"; do
+              [ -f "$dll" ] || continue
+              local tfm; tfm=$(basename "$(dirname "$dll")")
+              cp "$dll" ".api-gate/$label/$tfm.dll"
+              dotnet run ".api-gate/api-surface.cs" -- "$dll" ".api-gate/$label/$tfm.txt"
+            done
+          }
+
+          build_and_dump head
+          git checkout --quiet "${{ github.event.pull_request.base.sha }}"
+          build_and_dump base
+          git checkout --quiet -
+
+      - name: Compare the surfaces
+        id: diff
+        shell: bash
+        run: |
+          set -uo pipefail
+          verdict="additive"; total_add=0; total_rem=0
+          : > .api-gate/report.md
+
+          for basetxt in .api-gate/base/*.txt; do
+            tfm=$(basename "$basetxt" .txt)
+            headtxt=".api-gate/head/$tfm.txt"
+            if [ ! -f "$headtxt" ]; then
+              echo "- \`$tfm\`: **target framework removed**" >> .api-gate/report.md
+              verdict="breaking"; continue
+            fi
+            added=$(comm -13 "$basetxt" "$headtxt" | wc -l | tr -d ' ')
+            removed=$(comm -23 "$basetxt" "$headtxt" | wc -l | tr -d ' ')
+            total_add=$((total_add + added)); total_rem=$((total_rem + removed))
+            [ "$removed" -gt 0 ] && verdict="breaking"
+
+            echo "| \`$tfm\` | +$added | -$removed |" >> .api-gate/tfm.md
+            if [ "$removed" -gt 0 ]; then
+              {
+                echo ""
+                echo "<details><summary><code>$tfm</code> — $removed symbol(s) gone</summary>"
+                echo ""; echo '```'
+                comm -23 "$basetxt" "$headtxt" | head -40
+                [ "$removed" -gt 40 ] && echo "... and $((removed - 40)) more"
+                echo '```'; echo ""; echo "</details>"
+              } >> .api-gate/report.md
+            fi
+
+            # ApiCompat covers what a textual surface diff cannot: base types,
+            # accessibility, signature compatibility.
+            if ! apicompat --left ".api-gate/base/$tfm.dll" --right ".api-gate/head/$tfm.dll" \
+                 > ".api-gate/apicompat-$tfm.log" 2>&1; then
+              verdict="breaking"
+              {
+                echo ""
+                echo "<details><summary><code>$tfm</code> — ApiCompat reported binary incompatibility</summary>"
+                echo ""; echo '```'
+                grep '^CP' ".api-gate/apicompat-$tfm.log" | head -20
+                echo '```'; echo ""; echo "</details>"
+              } >> .api-gate/report.md
+            fi
+          done
+
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          echo "added=$total_add" >> "$GITHUB_OUTPUT"
+          echo "removed=$total_rem" >> "$GITHUB_OUTPUT"
+          echo "::notice::API verdict: $verdict (+$total_add / -$total_rem)"
+
+      - name: Post the verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERDICT: ${{ steps.diff.outputs.verdict }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            if [ "$VERDICT" = "additive" ]; then
+              echo "### API gate: additive"
+              echo ""
+              echo "Every symbol that existed still exists, unchanged. Nothing that compiled before stops compiling."
+            else
+              echo "### API gate: breaking"
+              echo ""
+              echo "This removes or changes public symbols. Merging is left to a human — a rename is sometimes the right answer, but never an automatic one."
+            fi
+            echo ""
+            echo "| Target framework | Added | Removed |"
+            echo "|---|---|---|"
+            cat .api-gate/tfm.md 2>/dev/null || true
+            cat .api-gate/report.md 2>/dev/null || true
+            echo ""
+            echo "<sub>Enum and constant *values* are part of the measured surface: a renumbering keeps compiling and sends the wrong number to the driver, so it counts as a removal.</sub>"
+          } > .api-gate/comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file .api-gate/comment.md
+
+      - name: Label a breaking change
+        if: steps.diff.outputs.verdict == 'breaking'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh label create 'api:breaking' -R "${{ github.repository }}" \
+            -c 'B60205' -d 'Removes or changes public API symbols' 2>/dev/null || true
+          gh pr edit "${{ github.event.pull_request.number }}" --add-label 'api:breaking'
+
+  # Separate job so the merge decision is readable on its own, and so a failure
+  # to merge never masks the measurement.
+  merge:
+    needs: gate
+    if: >
+      inputs.auto-merge &&
+      needs.gate.outputs.verdict == 'additive' &&
+      github.event.pull_request.user.login == 'github-actions[bot]' &&
+      contains(github.event.pull_request.labels.*.name, inputs.agent-label) &&
+      !contains(github.event.pull_request.labels.*.name, 'needs-human-review')
+    runs-on: ubuntu-latest
+    steps:
+      # Merging with GITHUB_TOKEN produces a push that triggers nothing, so main
+      # would carry the merge with no CI run against it. The App token does.
+      - name: Mint an App installation token
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ inputs.app-client-id }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Merge
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment "${{ github.event.pull_request.number }}" -R "${{ github.repository }}" \
+            --body "Merging automatically: the public API gained ${{ needs.gate.outputs.added }} symbol(s) and lost none."
+          gh pr merge "${{ github.event.pull_request.number }}" -R "${{ github.repository }}" \
+            --squash --delete-branch
