@@ -84,3 +84,18 @@ tr:last-child td { border-bottom: 0; }
 footer { margin-top: 34px; color: var(--dim); font-size: 11.5px; line-height: 1.7; }
 .back { color: var(--dim); text-decoration: none; font-size: 12px; }
 .back:hover { color: var(--ink); }
+
+/* Toolbox version chip: green current, amber one release back, red two or more. */
+.chip {
+  display: inline-block; margin-top: 6px; font-size: 10.5px; font-weight: 600;
+  padding: 1px 7px; border-radius: 99px; font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+}
+.chip.ok   { background: color-mix(in srgb, var(--ok) 16%, transparent);   color: var(--ok);   border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.chip.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.chip.bad  { background: color-mix(in srgb, var(--bad) 16%, transparent);  color: var(--bad);  border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.chip.idle { background: color-mix(in srgb, var(--idle) 18%, transparent); color: var(--dim); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--dim); font-size: 11.5px; margin: -4px 0 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.swatch { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.swatch.ok { background: var(--ok); } .swatch.warn { background: var(--warn); } .swatch.bad { background: var(--bad); }

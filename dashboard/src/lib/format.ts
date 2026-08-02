@@ -45,3 +45,29 @@ export function freshnessClass(days: number | null): string {
   if (days <= STALE_DAYS) return "warn";
   return "bad";
 }
+
+/** How far a repository's agents have fallen behind the toolbox.
+ *
+ *  Current is green, one release back is amber, two or more is red. The point
+ *  is not that an old pin is broken — it usually is not — but that the gap is
+ *  invisible otherwise: moving the `v1` tag does nothing to a repository until
+ *  somebody recompiles it, so a binding can sit on an old release indefinitely
+ *  without a single red run to give it away.
+ */
+export function toolboxClass(behind: number | null | undefined): string {
+  if (behind === null || behind === undefined) return "idle";
+  if (behind === 0) return "ok";
+  if (behind === 1) return "warn";
+  return "bad";
+}
+
+export function toolboxLabel(tb: any): string {
+  if (!tb) return "no agents";
+  if (!tb.version) return "unknown pin";
+  if (tb.behind === 0) return `${tb.version} · current`;
+  const releases = tb.behind === 1 ? "1 release" : `${tb.behind} releases`;
+  // A release that only touched a reusable workflow leaves the agents
+  // byte-identical. Saying "behind" without saying that would be true and
+  // misleading at the same time.
+  return `${tb.version} · ${releases} behind${tb.agents_differ === false ? ", agents unchanged" : ""}`;
+}
