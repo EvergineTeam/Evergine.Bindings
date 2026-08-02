@@ -4,6 +4,20 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.7.0] - 2026-08-02
+
+### Added
+
+- **`ci-doctor` can now open the pull requests it is for.** With a GitHub App configured, `allow-workflows: true` grants the `workflows` permission that `GITHUB_TOKEN` cannot hold. Until now the doctor could diagnose a broken workflow and then fail to propose the fix, degrading to an issue with a manual link — the one thing it exists to do, blocked by the one permission it needed.
+
+### Changed
+
+- **`toolbox-updater` uses the App instead of a personal token.** It previously required a `WORKFLOW_TOKEN` secret with `workflow` scope. An installation token is better on every axis that matters here: owned by the organisation rather than by a person, valid for an hour rather than a year, and it does not stop working when whoever created it changes role.
+
+### Note on scope
+
+Only `ci-doctor` and `toolbox-updater` use the App. `binding-updater` writes to the generator and its output, never to `.github/workflows/`, so it keeps the default token — the smaller permission is the correct one for it.
+
 ## [1.6.0] - 2026-08-02
 
 ### Added
