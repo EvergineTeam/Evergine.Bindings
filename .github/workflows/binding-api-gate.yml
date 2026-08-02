@@ -128,6 +128,13 @@ jobs:
 
           build_and_dump () {
             local label="$1"
+            # Both sides build into the same tree, one after the other, so the
+            # output directory must be emptied first. Without this, a pull
+            # request that changes the target framework leaves the previous
+            # side's assembly sitting under its old TFM folder, and the glob
+            # below picks it up as if it belonged to this side -- comparing an
+            # assembly against itself and reporting no change.
+            rm -rf "$outdir"
             dotnet build "$PROJECT" -c "$CONFIG" -v q --nologo
             mkdir -p ".api-gate/$label"
             # Every target framework the project produces is compared. A binding
