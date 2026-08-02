@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evergine Bindings — fleet status</title>
+<style>
+  :root{
+    --bg:#0b0c0e; --panel:#141619; --line:#24272c; --ink:#e7e9ea; --dim:#8b9199;
+    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --idle:#71717a;
+    --updater:#3b82f6; --doctor:#06b6d4; --toolbox:#a855f7;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f7f8f9; --panel:#fff; --line:#e3e6ea; --ink:#14161a; --dim:#5c636b; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  a{color:inherit}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 64px}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin-bottom:6px}
+  h1{font-size:19px;margin:0;letter-spacing:-.01em}
+  .stamp{color:var(--dim);font-size:12px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);
+     margin:30px 0 12px;font-weight:600}
+
+  /* Carousel: one card per binding, horizontally scrollable, click to focus. */
+  .rail{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 12px;scroll-snap-type:x mandatory}
+  .rail::-webkit-scrollbar{height:8px}
+  .rail::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  .card{flex:0 0 190px;scroll-snap-align:start;background:var(--panel);
+        border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;
+        transition:border-color .15s,transform .15s}
+  .card:hover{transform:translateY(-2px)}
+  .card[aria-selected="true"]{border-color:var(--updater);box-shadow:0 0 0 1px var(--updater)}
+  .card .name{font-weight:600;font-size:13px;margin-bottom:8px;white-space:nowrap;
+              overflow:hidden;text-overflow:ellipsis}
+  .lights{display:flex;gap:5px;margin-bottom:8px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--idle)}
+  .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.warn{background:var(--warn)}
+  .meta{color:var(--dim);font-size:11.5px;line-height:1.5}
+  .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:99px;
+         border:1px solid var(--line);color:var(--dim);margin-top:6px}
+
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .tile .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .tile .v{font-size:24px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+  .tile .s{color:var(--dim);font-size:11.5px;margin-top:2px}
+  .v.good{color:var(--ok)} .v.bad{color:var(--bad)}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-weight:600;font-size:11px;text-transform:uppercase;
+     letter-spacing:.06em;padding:6px 10px;border-bottom:1px solid var(--line)}
+  td{padding:8px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:0}
+  .scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;font-weight:500}
+  .pill.success{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+  .pill.failure{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+  .pill.other{background:color-mix(in srgb,var(--idle) 22%,transparent);color:var(--dim)}
+  .agent{font-weight:500}
+  .agent.updater{color:var(--updater)} .agent.doctor{color:var(--doctor)}
+  .agent.toolbox{color:var(--toolbox)}
+  .empty{color:var(--dim);padding:26px;text-align:center;background:var(--panel);
+         border:1px solid var(--line);border-radius:10px}
+  footer{margin-top:34px;color:var(--dim);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Evergine Bindings</h1>
+    <span class="stamp" id="stamp"></span>
+  </header>
+  <p class="meta" id="intro"></p>
+
+  <h2>Fleet</h2>
+  <div class="rail" id="rail"></div>
+
+  <div id="fleet">
+    <h2>Health</h2>
+    <div class="tiles" id="tiles"></div>
+    <h2>Recent agent activity</h2>
+    <div id="runs"></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const AGENT_CLASS = {"Binding Updater":"updater","CI Doctor":"doctor","Toolbox Updater":"toolbox"};
+
+const fmtNum = n => n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e3 ? (n/1e3).toFixed(1)+"K" : String(n ?? 0);
+const fmtMoney = n => "$" + (n ?? 0).toFixed(2);
+const fmtDur = s => s < 60 ? Math.round(s)+"s" : Math.floor(s/60)+"m "+Math.round(s%60)+"s";
+const fmtWhen = iso => new Date(iso).toLocaleString(undefined,
+  {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+const daysSince = iso => iso ? Math.floor((Date.now()-new Date(iso))/86400000) : null;
+
+let DATA, selected = null;
+
+function lightClass(conclusion){
+  if(!conclusion) return "";
+  return conclusion === "success" ? "ok" : conclusion === "failure" ? "bad" : "warn";
+}
+
+function renderRail(){
+  $("#rail").innerHTML = DATA.repos.map(r => {
+    const lights = ["CI","CD","Sync standards"].map(w => {
+      const p = r.pipeline[w];
+      return `<span class="dot ${lightClass(p && p.conclusion)}" title="${w}: ${p ? p.conclusion : "no runs"}"></span>`;
+    }).join("");
+    const age = daysSince(r.package.published);
+    return `<div class="card" role="button" tabindex="0" data-repo="${r.repo}"
+                 aria-selected="${selected === r.repo}">
+      <div class="name">${r.repo}</div>
+      <div class="lights">${lights}</div>
+      <div class="meta">
+        ${r.package.version ? `NuGet <strong>${r.package.version}</strong>` : "no package"}<br>
+        ${age !== null ? `published ${age}d ago` : "&nbsp;"}
+      </div>
+      ${r.has_agents ? '<span class="badge">agents</span>' : ""}
+    </div>`;
+  }).join("");
+
+  document.querySelectorAll(".card").forEach(el => {
+    const pick = () => { selected = selected === el.dataset.repo ? null : el.dataset.repo; render(); };
+    el.onclick = pick;
+    el.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); pick(); } };
+  });
+}
+
+function renderTiles(){
+  const t = DATA.totals;
+  const scoped = selected ? DATA.repos.find(r => r.repo === selected) : null;
+  const tiles = scoped ? [
+    ["NuGet", scoped.package.version || "—", scoped.package.id || ""],
+    ["Freshness", daysSince(scoped.package.published) !== null
+        ? daysSince(scoped.package.published)+"d" : "—", "since last publish"],
+    ["Agent PRs", scoped.prs.total, `${scoped.prs.merged} merged · ${scoped.prs.open} open`],
+    ["Needs a human", scoped.open_issues, "open agent issues"],
+    ["Silent failures", scoped.silent_failures, "red with nobody on it", scoped.silent_failures ? "bad" : "good"],
+  ] : [
+    ["Repositories", t.repos, `${t.with_manifest} with a manifest`],
+    ["Running agents", t.with_agents, `of ${t.repos} in the fleet`],
+    ["Agent runs", t.agent_runs, `last ${DATA.window_days} days`],
+    ["AI Credits", t.credits, fmtMoney(t.cost)],
+    ["Agent PRs", t.prs_merged + t.prs_open + t.prs_rejected,
+      `${t.prs_merged} merged · ${t.prs_rejected} rejected`],
+    ["Silent failures", t.silent_failures, "red with nobody on it",
+      t.silent_failures ? "bad" : "good"],
+  ];
+  $("#tiles").innerHTML = tiles.map(([k,v,s,cls]) =>
+    `<div class="tile"><div class="k">${k}</div>
+      <div class="v ${cls||""}">${v}</div><div class="s">${s||""}</div></div>`).join("");
+}
+
+function renderRuns(){
+  const runs = selected ? DATA.runs.filter(r => r.repo === selected) : DATA.runs;
+  if(!runs.length){
+    $("#runs").innerHTML = `<div class="empty">No agent runs recorded${selected ? " for "+selected : ""} yet.<br>
+      This is the expected state until the agents are installed and something wakes them.</div>`;
+    return;
+  }
+  $("#runs").innerHTML = `<div class="scroll"><table>
+    <thead><tr><th>When</th><th>Repo</th><th>Agent</th><th>Result</th>
+      <th>Model</th><th>Turns</th><th>Tokens</th><th>Credits</th><th>Duration</th></tr></thead>
+    <tbody>${runs.slice(0,60).map(r => `<tr>
+      <td>${fmtWhen(r.ts)}</td>
+      <td>${r.repo}</td>
+      <td class="agent ${AGENT_CLASS[r.agent]||""}">${r.agent}</td>
+      <td><span class="pill ${["success","failure"].includes(r.status)?r.status:"other"}">${r.status}</span></td>
+      <td>${r.model || "—"}</td>
+      <td>${r.iterations || "—"}</td>
+      <td>${r.tokens ? fmtNum(r.tokens) : "—"}</td>
+      <td>${r.credits != null ? r.credits.toFixed(2) : "—"}</td>
+      <td>${r.duration_s ? fmtDur(r.duration_s) : "—"}</td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+
+function render(){
+  renderRail(); renderTiles(); renderRuns();
+  $("#intro").textContent = selected
+    ? `Showing ${selected}. Click the card again for the whole fleet.`
+    : `${DATA.totals.repos} binding repositories. Click a card to focus one.`;
+}
+
+fetch("agents-data.json")
+  .then(r => r.json())
+  .then(d => {
+    DATA = d;
+    $("#stamp").textContent = "updated " + fmtWhen(d.generated_at);
+    render();
+  })
+  .catch(() => {
+    $("#intro").textContent = "";
+    $("#tiles").innerHTML = `<div class="empty">Could not load <code>agents-data.json</code>.
+      The collector has probably not run yet.</div>`;
+  });
+</script>
+<footer>
+  Generated by <code>metrics/collect-metrics.py</code> in
+  <a href="https://github.com/EvergineTeam/Evergine.Bindings">EvergineTeam/Evergine.Bindings</a>.
+  Read-only: nothing here writes to a binding repository.
+</footer>
+</body>
+</html>
