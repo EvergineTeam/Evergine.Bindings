@@ -220,16 +220,6 @@ jobs:
           file-name: ${{ env.xml_file }}
           location: ${{ env.xml_dir }}
 
-      - name: Commit, push or PR XML update
-        uses: EvergineTeam/Evergine.Bindings/.github/actions/commit-and-push-or-pr-update@v1
-        with:
-          commit_message: "Update XML file for binding ${{ inputs.generator-name }}"
-          mode: auto
-          labels: xml
-          pr_branch_name: chore/update-xml-${{ inputs.generator-name }}
-          pr_title: "Update XML for ${{ inputs.generator-name }}"
-          pr_body: "Automated update of XML file for binding ${{ inputs.generator-name }}."
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -252,7 +242,49 @@ jobs:
           build-configuration: ${{ inputs.build-configuration }}
           restore-workloads: ${{ inputs.restore-workloads }}
 
+      # A changed registry does not mean a changed API. Khronos reorders elements,
+      # fixes typos and edits documentation without touching a single declaration,
+      # and publishing a functionally identical package on the back of that is
+      # noise for everyone consuming the feed. The generated code is the honest
+      # signal: if it is byte-identical, nothing that matters moved.
+      - name: Detect generated-code changes
+        id: generated
+        shell: pwsh
+        run: |
+          $xmlPath = "${{ inputs.xml-path }}".Replace('\', '/')
+          # Everything dirty except the registry itself is generator output: the
+          # registry was overwritten by the download step a moment ago.
+          $dirty = @(git status --porcelain --untracked-files=all |
+                     Where-Object { $_.Substring(3).Replace('\', '/') -ne $xmlPath })
+          $changed = $dirty.Count -gt 0
+          echo "generated_changed=$($changed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if ($changed) {
+            Write-Host "Generated code changed in $($dirty.Count) file(s):"
+            $dirty | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" }
+          } else {
+            Write-Host "The registry changed but the generated API did not. Nothing to publish."
+          }
+
+      # Committed after generation, not before, so the registry and the code
+      # generated from it land in the same commit. Committing the XML first --
+      # which is what this workflow used to do -- is why Vulkan.NET's checked-in
+      # Generated/ sat four months behind its own vk.xml while every published
+      # package was correct.
+      - name: Commit XML and regenerated bindings
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/commit-and-push-or-pr-update@v1
+        with:
+          commit_message: >-
+            Update ${{ inputs.generator-name }} registry${{
+              steps.generated.outputs.generated_changed == 'true'
+                && ' and regenerate bindings' || ' (no API change)' }}
+          mode: auto
+          labels: xml
+          pr_branch_name: chore/update-xml-${{ inputs.generator-name }}
+          pr_title: "Update XML for ${{ inputs.generator-name }}"
+          pr_body: "Automated update of XML file for binding ${{ inputs.generator-name }}."
+
       - name: Generate NuGets
+        if: steps.generated.outputs.generated_changed == 'true'
         uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-nugets-dotnet@v1
         with:
           script-path: ${{ inputs.nugets-script-path }}
@@ -269,11 +301,12 @@ jobs:
           symbols-format: ${{ inputs.symbols-format }}
 
       - name: List generated NuGets
+        if: steps.generated.outputs.generated_changed == 'true'
         run: |
           ls ${{ inputs.output-folder }}/*.nupkg
 
       - name: Publish NuGet
-        if: ${{ success() && inputs.publish-enabled == true }}
+        if: ${{ success() && inputs.publish-enabled == true && steps.generated.outputs.generated_changed == 'true' }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/nuget-publish@v1
         with:
           packages-folder: ${{ inputs.output-folder }}
