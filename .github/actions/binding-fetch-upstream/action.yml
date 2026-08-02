@@ -26,6 +26,12 @@ outputs:
   report:
     description: "Path to the written report"
     value: ${{ steps.fetch.outputs.report }}
+  paths:
+    description: >-
+      Newline-separated vendored paths declared in the manifest. The caller needs
+      these to tell fetched sources apart from generator output when deciding
+      what changed, and taking them from here avoids re-parsing YAML in a shell.
+    value: ${{ steps.fetch.outputs.paths }}
 
 runs:
   using: composite

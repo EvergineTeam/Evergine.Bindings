@@ -1,0 +1,280 @@
+name: Binding Tracked CD (Reusable)
+
+description: >
+  Reusable workflow for bindings that track an upstream specification. Reads
+  binding.yml, fetches whatever it declares through the adapter named by
+  upstream.kind, regenerates, and publishes only when the generated API changed.
+
+  Not specific to any source format: http-file, git-tree and git-submodule are
+  all handled by the binding-fetch-upstream action, so the same workflow serves
+  XML registries, C headers and submodules alike.
+
+  Use binding-simple-cd instead for bindings that must not regenerate
+  automatically -- notably those shipping native binaries built from the same
+  upstream, where a header bump without a rebuild produces a managed layer that
+  does not match the binary it loads.
+
+on:
+  workflow_call:
+    inputs:
+      manifest:
+        description: 'Path to the binding manifest declaring the upstream sources'
+        required: false
+        type: string
+        default: 'binding.yml'
+      generator-project:
+        description: 'Path to the generator .csproj file'
+        required: true
+        type: string
+      generator-name:
+        description: 'Name of the generator/binding'
+        required: true
+        type: string
+      binding-project:
+        description: 'Path to the binding .csproj file'
+        required: true
+        type: string
+      dependency-projects:
+        description: 'Comma-separated list of .csproj paths that need to be built first (dependencies) but won''t generate NuGet packages'
+        required: false
+        type: string
+        default: ''
+      target-framework:
+        description: 'Target framework for the binding'
+        required: false
+        type: string
+        default: 'net8.0'
+      dotnet-version:
+        description: 'Version of .NET SDK to use (e.g., 8.x)'
+        required: false
+        type: string
+        default: '8.x'
+      nuget-version:
+        description: 'Version of NuGet CLI to use (e.g., 6.x)'
+        required: false
+        type: string
+        default: '6.x'
+      nuget-source:
+        description: 'NuGet source for publishing packages'
+        required: false
+        type: string
+        default: 'https://api.nuget.org/v3/index.json'
+      runtime-identifier:
+        description: 'Runtime identifier (optional, for platform-specific bindings)'
+        required: false
+        type: string
+        default: 'win-x64'
+      build-verbosity:
+        description: 'dotnet verbosity level'
+        required: false
+        type: string
+        default: 'normal'
+      build-configuration:
+        description: 'Build configuration (Release, Debug, etc.)'
+        required: false
+        type: string
+        default: 'Release'
+      restore-workloads:
+        description: 'Restore .NET workloads for projects before packaging'
+        required: false
+        type: boolean
+        default: false
+      version:
+        description: 'Direct version string to use for packages (e.g., "3.4.22.288-local")'
+        required: false
+        type: string
+        default: ''
+      revision:
+        description: 'Revision number to append to date-based version (e.g., "123" -> "2025.10.29.123"). Cannot be used with version.'
+        required: false
+        type: string
+        default: ''
+      output-folder:
+        description: 'Base folder for NuGet package output'
+        required: false
+        type: string
+        default: 'nupkgs'
+      include-symbols:
+        description: 'Whether to include debug symbols in packages'
+        required: false
+        type: boolean
+        default: false
+      symbols-format:
+        description: 'Symbol package format: snupkg (modern) or symbols.nupkg (legacy)'
+        required: false
+        type: string
+        default: 'snupkg'
+      bindings-script-path:
+        description: 'Path to the Generate-Bindings-DotNet.ps1 script'
+        required: false
+        type: string
+        default: 'build/scripts/Generate-Bindings-DotNet.ps1'
+      nugets-script-path:
+        description: 'Path to the Generate-NuGets-DotNet.ps1 script'
+        required: false
+        type: string
+        default: 'build/scripts/Generate-NuGets-DotNet.ps1'
+      helpers-path:
+        description: 'Path to the Helpers.ps1 file. Defaults to Helpers.ps1 in the same directory as the script.'
+        required: false
+        type: string
+        default: 'build/scripts/Helpers.ps1'
+      force-publish:
+        description: >-
+          Publish even when the generated code is unchanged. For shipping work a
+          human already reviewed and merged: an agent pull request commits the
+          regenerated output, so by the time CD runs there is nothing left to
+          detect and the package would never go out.
+        required: false
+        type: boolean
+        default: false
+      publish-enabled:
+        description: 'Publish to Nuget.org'
+        required: false
+        type: boolean
+        default: true
+      enable-email-notifications:
+        description: 'Enable email notifications on failure'
+        required: false
+        type: boolean
+        default: true
+      runner-os:
+        description: 'GitHub runner OS (e.g., ubuntu-latest, windows-latest)'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+    secrets:
+      NUGET_UPLOAD_TOKEN:
+        description: 'NuGet publish credential (NuGet API key or Azure Artifacts PAT)'
+        required: true
+      WAVE_SENDGRID_TOKEN:
+        description: 'SendGrid API key for email notifications'
+        required: false
+      EVERGINE_EMAILREPORT_LIST:
+        description: 'Email addresses to send failure notifications to'
+        required: false
+      EVERGINE_EMAIL:
+        description: 'Sender email address for notifications' 
+        required: false
+jobs:
+  build_and_publish:
+    runs-on: ${{ inputs.runner-os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Fetch upstream sources
+        id: upstream
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-fetch-upstream@v1
+        with:
+          manifest: ${{ inputs.manifest }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Setup NuGet CLI
+        uses: nuget/setup-nuget@v2
+        with:
+          nuget-version: ${{ inputs.nuget-version }}
+
+      - name: Generate bindings
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-bindings-dotnet@v1
+        with:
+          script-path: ${{ inputs.bindings-script-path }}
+          generator-project: ${{ inputs.generator-project }}
+          generator-name: ${{ inputs.generator-name }}
+          target-framework: ${{ inputs.target-framework }}
+          runtime-identifier: ${{ inputs.runtime-identifier }}
+          build-verbosity: ${{ inputs.build-verbosity }}
+          build-configuration: ${{ inputs.build-configuration }}
+          restore-workloads: ${{ inputs.restore-workloads }}
+
+      # A changed upstream does not mean a changed API. Khronos reorders elements
+      # and fixes typos; a header gains a comment. Publishing a functionally
+      # identical package on the back of that is noise for everyone consuming the
+      # feed. The generated code is the honest signal.
+      - name: Detect generated-code changes
+        id: generated
+        shell: pwsh
+        run: |
+          # Everything dirty except the vendored sources is generator output: the
+          # sources were just overwritten by the fetch step. The path list comes
+          # from the action, which parsed the manifest properly, rather than from
+          # a regex over YAML in a shell.
+          $sources = @('${{ steps.upstream.outputs.paths }}'.Split("`n") |
+                       ForEach-Object { $_.Trim().Replace([char]92,'/') } |
+                       Where-Object { $_ })
+          $dirty = @(git status --porcelain --untracked-files=all | Where-Object {
+            $entry = $_.Substring(3).Replace([char]92,'/')
+            -not ($sources | Where-Object { $entry -eq $_ -or $entry.StartsWith("$_/") })
+          })
+          $changed = $dirty.Count -gt 0
+          echo "generated_changed=$($changed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if ($changed) {
+            Write-Host "Generated code changed in $($dirty.Count) file(s):"
+            $dirty | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" }
+          } else {
+            Write-Host "Upstream may have moved but the generated API did not. Nothing to publish."
+          }
+
+      # Committed after generation, not before, so the registry and the code
+      # generated from them land in the same commit. Committing the sources first
+      # is why Vulkan.NET's checked-in Generated/ sat four months behind its own
+      # vk.xml while every published package was correct: the regenerated output
+      # was packed and then discarded.
+      - name: Commit upstream sources and regenerated bindings
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/commit-and-push-or-pr-update@v1
+        with:
+          commit_message: >-
+            Update ${{ inputs.generator-name }} upstream sources${{
+              steps.generated.outputs.generated_changed == 'true'
+                && ' and regenerate bindings' || ' (no API change)' }}
+          mode: auto
+          labels: upstream
+          pr_branch_name: chore/update-upstream-${{ inputs.generator-name }}
+          pr_title: "Update upstream sources for ${{ inputs.generator-name }}"
+          pr_body: "Automated update of upstream sources for binding ${{ inputs.generator-name }}."
+
+      - name: Generate NuGets
+        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-nugets-dotnet@v1
+        with:
+          script-path: ${{ inputs.nugets-script-path }}
+          helpers-path: ${{ inputs.helpers-path }}
+          projects: ${{ inputs.binding-project }}
+          dependency-projects: ${{ inputs.dependency-projects }}
+          output-folder: ${{ inputs.output-folder }}
+          build-verbosity: ${{ inputs.build-verbosity }}
+          build-configuration: ${{ inputs.build-configuration }}
+          restore-workloads: ${{ inputs.restore-workloads }}
+          version: ${{ inputs.version }}
+          revision: ${{ inputs.revision }}
+          include-symbols: ${{ inputs.include-symbols }}
+          symbols-format: ${{ inputs.symbols-format }}
+
+      - name: List generated NuGets
+        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish
+        run: |
+          ls ${{ inputs.output-folder }}/*.nupkg
+
+      - name: Publish NuGet
+        if: ${{ success() && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish) }}
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/nuget-publish@v1
+        with:
+          packages-folder: ${{ inputs.output-folder }}
+          source-url: ${{ inputs.nuget-source }}
+          auth-token: ${{ secrets.NUGET_UPLOAD_TOKEN }}
+          package-pattern: "**/*.nupkg"
+          skip-duplicate: 'true'
+          no-symbols: 'true'
+
+      - name: Send failure notification
+        if: ${{ failure() && inputs.enable-email-notifications == true }}
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/send-notification-email@v1
+        with:
+          sendgrid-token: ${{ secrets.WAVE_SENDGRID_TOKEN }}
+          from-email: ${{ secrets.EVERGINE_EMAIL }}
+          to-emails: ${{ secrets.EVERGINE_EMAILREPORT_LIST }}
+          subject: Binding tracked CD publish failed - ${{ github.repository }}

@@ -4,6 +4,26 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.5.0] - 2026-08-02
+
+### Added
+
+- **`binding-tracked-cd`** — a CD for bindings that follow an upstream specification. Reads `binding.yml`, fetches whatever it declares through `binding-fetch-upstream`, regenerates, commits sources and generated code together, and publishes only when the generated API changed.
+
+  It is **not specific to any source format**. The adapter handles `http-file`, `git-tree` and `git-submodule`, so the same workflow serves XML registries, C headers and submodules. That is why it is named for the mechanism rather than the format.
+
+  Structurally it is `binding-xml-cd` with the download replaced by the action and the `check_xml` job removed — the action does the comparison inside the build job, and a separate pre-check would have blocked `force-publish`.
+
+### Not changed
+
+- **`binding-simple-cd` is untouched**, verified by diff. It remains correct for the six bindings that ship native binaries built from the same upstream, where regenerating without rebuilding produces a managed layer that does not match the binary it loads. Their manifests say so explicitly.
+
+  An earlier draft added an opt-in `track-upstream` flag to `binding-simple-cd` instead. A separate workflow is better: a flag would have put `if: inputs.track-upstream != true || generated_changed || force-publish` in front of publishing for seven repositories, and a triple negative governing releases is a poor thing to have to review.
+
+### Note
+
+`binding-tracked-cd` makes `binding-xml-cd` redundant — the three XML bindings could migrate by swapping the `uses:` and dropping their `xml-*` inputs, since their manifests already declare the same sources. Deliberately not done here: they work today, and mixing that with proving the new workflow on RenderDoc.NET would make a failure impossible to attribute.
+
 ## [1.4.1] - 2026-08-02
 
 ### Fixed
