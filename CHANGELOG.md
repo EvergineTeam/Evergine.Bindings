@@ -4,6 +4,13 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.1.3] - 2026-08-02
+
+### Changed
+
+- **`binding-updater` runs on `claude-sonnet-5` instead of `claude-opus-4.8`.** Opus resolved correctly but every request came back `429 Too Many Requests` — five retries per attempt, two attempts, then the job timed out having produced nothing. Not a quota or budget problem (`isCAPIQuotaExceededError: false`, `tokenCount: 0`): the model is capacity-constrained through Copilot. A monthly agent that cannot get a response is worth less than a slightly weaker one that runs. Revisit once there is real workload data showing Sonnet struggling.
+- **Raised the updater's `timeout-minutes` from the default 20 to 40.** Twenty minutes was too tight regardless of the 429s: downloading a multi-megabyte registry, regenerating, building and reasoning about the diff can legitimately take longer, and pairing a 20-minute ceiling with ~6.5-minute retry cycles meant a failing run burned the entire budget mid-attempt.
+
 ## [1.1.2] - 2026-08-02
 
 ### Fixed

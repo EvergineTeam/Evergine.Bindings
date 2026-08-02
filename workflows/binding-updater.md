@@ -15,8 +15,9 @@ permissions:
   pull-requests: read
   copilot-requests: write
 strict: true
-model: claude-opus-4.8
+model: claude-sonnet-5
 max-turns: 60
+timeout-minutes: 40
 max-ai-credits: 600
 network:
   allowed:
