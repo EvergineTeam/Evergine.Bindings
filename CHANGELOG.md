@@ -4,6 +4,18 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.5.1] - 2026-08-02
+
+### Fixed
+
+- **Change detection asks git what would be committed, not what the tree looks like.** Both `binding-tracked-cd` and `binding-xml-cd` used `git status --porcelain`, which compares the working tree against the index and is therefore sensitive to line endings. On a Windows runner, checkout writes CRLF while these files are stored as LF, so every generated file read as modified even when the generator produced byte-identical content.
+
+  The first RenderDoc.NET run made it visible by contradicting itself: detection reported three changed files, and the commit step that followed found nothing to record. Staging first and inspecting `git diff --cached` applies the same normalisation the commit will, so the two can no longer disagree.
+
+  Consequence had it shipped: a NuGet published every month for a binding nobody touched, every job green.
+
+  `binding-xml-cd` carried the same logic. It has not misbehaved because its three repositories run on ubuntu, where nothing rewrites line endings — latent rather than harmless, and fixed alongside.
+
 ## [1.5.0] - 2026-08-02
 
 ### Added
