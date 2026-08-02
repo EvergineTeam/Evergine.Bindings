@@ -4,6 +4,20 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.3.0] - 2026-08-02
+
+### Changed
+
+- **`binding-xml-cd` publishes only when the generated code changes, not when the registry does.** A changed `vk.xml` is not a changed API: Khronos reorders elements, fixes typos and edits documentation without touching a declaration, and each of those was producing a functionally identical NuGet. The generated output is the honest signal — if it is byte-identical, nothing worth shipping moved.
+
+- **The registry and the code generated from it are now committed together.** The workflow used to commit the XML *before* running the generator, so the regenerated output was packed, published and discarded. That is why Vulkan.NET's checked-in `Generated/` sat four months behind its own `vk.xml` while every published package was correct: the NuGet was never wrong, the repository was.
+
+  The commit now happens after generation, and `git add -A` picks up both. A registry update with no API change still gets committed — the vendored spec stays current either way — but it is labelled `(no API change)` and publishes nothing.
+
+### Note for consumers
+
+The first run after this lands will produce a large commit in any repository whose `Generated/` has drifted, because it catches up in one go. That is the backlog being paid off, not the workflow misbehaving.
+
 ## [1.2.0] - 2026-08-02
 
 Acts on what the first real pilot run measured. It succeeded and cost 46 AI Credits ($0.46), but `gh aw audit` flagged that 93% of its 32 turns were data-gathering a script could do, and that the firewall had blocked a domain the agent then had to reason about.
