@@ -4,6 +4,16 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.4.1] - 2026-08-02
+
+### Fixed
+
+- **`binding-fetch-upstream` now runs on Windows.** It hardcoded `python3`, which does not exist on Windows runners, and called `pip` directly rather than `python -m pip`. The action had only ever run on ubuntu — the three XML bindings use the default runner — so this was latent rather than observed. RenderDoc.NET and KTX.NET run on `windows-latest`.
+
+- **Line endings no longer produce phantom changes.** The action compared raw bytes, so a working tree checked out with CRLF against a download arriving as LF reported a change on every run. Nothing would have failed: it would have regenerated, committed and published every month for a file nobody touched. Comparison is now blind to line endings, and writes preserve whichever convention the vendored file already uses, so refreshing a source changes declarations and nothing else.
+
+  `binding-xml-cd` has carried a "Normalize downloaded XML to CRLF" step for exactly this reason. Handling it in the adapter is better: it works regardless of platform, of `core.autocrlf`, and of which convention a given repository happens to use.
+
 ## [1.4.0] - 2026-08-02
 
 ### Added

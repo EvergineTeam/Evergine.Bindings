@@ -39,6 +39,11 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
         set -euo pipefail
-        python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
+        # Windows runners ship `python`, not `python3`, and `pip` is not always on
+        # PATH even when the interpreter is. This action ran only on ubuntu until
+        # now, so neither had ever mattered.
+        PY=$(command -v python3 || command -v python) || {
+          echo "::error::no Python interpreter on PATH"; exit 1; }
+        "$PY" -c "import yaml" 2>/dev/null || "$PY" -m pip install --quiet pyyaml
         mkdir -p "$(dirname "$REPORT_PATH")"
-        python3 "$GITHUB_ACTION_PATH/fetch_upstream.py"
+        "$PY" "$GITHUB_ACTION_PATH/fetch_upstream.py"
