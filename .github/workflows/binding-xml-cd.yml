@@ -111,6 +111,15 @@ on:
         required: false
         type: string
         default: 'build/scripts/Helpers.ps1'
+      force-publish:
+        description: >-
+          Publish even when the generated code is unchanged. For shipping work a
+          human already reviewed and merged: an agent pull request commits the
+          regenerated output, so by the time CD runs there is nothing left to
+          detect and the package would never go out.
+        required: false
+        type: boolean
+        default: false
       publish-enabled:
         description: 'Publish to Nuget.org'
         required: false
@@ -284,7 +293,7 @@ jobs:
           pr_body: "Automated update of XML file for binding ${{ inputs.generator-name }}."
 
       - name: Generate NuGets
-        if: steps.generated.outputs.generated_changed == 'true'
+        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish
         uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-nugets-dotnet@v1
         with:
           script-path: ${{ inputs.nugets-script-path }}
@@ -301,12 +310,12 @@ jobs:
           symbols-format: ${{ inputs.symbols-format }}
 
       - name: List generated NuGets
-        if: steps.generated.outputs.generated_changed == 'true'
+        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish
         run: |
           ls ${{ inputs.output-folder }}/*.nupkg
 
       - name: Publish NuGet
-        if: ${{ success() && inputs.publish-enabled == true && steps.generated.outputs.generated_changed == 'true' }}
+        if: ${{ success() && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish) }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/nuget-publish@v1
         with:
           packages-folder: ${{ inputs.output-folder }}

@@ -4,6 +4,16 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.4.0] - 2026-08-02
+
+### Added
+
+- **`force-publish` input on `binding-xml-cd`.** v1.3.0 gated publishing on the generated code changing, which stopped functionally identical packages going out but also blocked the opposite case: an agent opens a pull request containing the regenerated output, a human reviews and merges it, and by the time CD runs there is nothing left to detect. The work sits on the default branch and never reaches nuget.org.
+
+  Found by running it, not by reading it — OpenGL.NET's regeneration merged cleanly and then CD reported "the registry changed but the generated API did not. Nothing to publish."
+
+  The scheduled path keeps the gate exactly as it was. `force-publish` is opt-in on manual dispatch, for shipping something a person has already approved.
+
 ## [1.3.0] - 2026-08-02
 
 ### Changed
