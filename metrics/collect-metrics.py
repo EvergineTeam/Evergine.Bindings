@@ -66,6 +66,75 @@ def api(path, paginate=False):
     return results
 
 
+def toolbox_releases():
+    """Release tags newest-first, with the commit each points at.
+
+    The moving `v1` tag is excluded: it is an alias, not a release, and counting
+    it would make every repository look one version behind forever.
+    """
+    tags = api(f"repos/{ORG}/Evergine.Bindings/tags?per_page=100", paginate=True) or []
+    releases = [
+        (t["name"], t["commit"]["sha"])
+        for t in tags
+        if t["name"].count(".") == 2 and t["name"].startswith("v")
+    ]
+
+    def key(name):
+        return tuple(int(p) for p in name[1:].split("."))
+
+    return sorted(releases, key=lambda r: key(r[0]), reverse=True)
+
+
+def toolbox_state(repo, releases, current_agents):
+    """Which toolbox release a repository's installed agents came from.
+
+    Two different questions, and they do not always agree:
+
+      `behind`        how many releases have shipped since the pin. This is what
+                      the dashboard colours, because it is what a reader means by
+                      "is it up to date".
+      `agents_differ` whether the installed workflow text actually differs from
+                      the current one. A release that only touched a reusable CI
+                      workflow leaves the agents byte-identical, and saying a
+                      repository is stale in that case would be technically true
+                      and practically misleading.
+    """
+    installed = api(f"repos/{ORG}/{repo}/contents/.github/workflows/binding-updater.md")
+    if not installed:
+        return None
+
+    import base64
+    import re
+
+    text = base64.b64decode(installed["content"]).decode("utf-8", "replace")
+    match = re.search(r"^source:\s*\S+@([0-9a-f]{7,40})\s*$", text, re.MULTILINE)
+    sha = match.group(1) if match else None
+
+    version, behind = None, None
+    if sha:
+        for index, (name, tag_sha) in enumerate(releases):
+            if tag_sha.startswith(sha) or sha.startswith(tag_sha):
+                version, behind = name, index
+                break
+
+    # The `source:` line is rewritten on install, so it always differs. Strip it
+    # before comparing; everything else is the workflow the agent actually runs.
+    def body(s):
+        return "\n".join(l for l in s.splitlines() if not l.startswith("source:")).strip()
+
+    agents_differ = None
+    if current_agents:
+        agents_differ = body(text) != body(current_agents)
+
+    return {
+        "sha": sha,
+        "version": version,
+        "behind": behind,
+        "latest": releases[0][0] if releases else None,
+        "agents_differ": agents_differ,
+    }
+
+
 def nuget_latest(package_id):
     """Latest published version and its date, straight from nuget.org."""
     try:
@@ -102,7 +171,7 @@ def audit(run_id, repo):
         return None
 
 
-def collect_repo(repo, since):
+def collect_repo(repo, since, releases, current_agents):
     runs, agent_records = [], []
     for run in api(f"repos/{ORG}/{repo}/actions/runs?per_page=100", paginate=True):
         if run["created_at"] < since:
@@ -184,6 +253,7 @@ def collect_repo(repo, since):
     return {
         "repo": repo,
         "has_manifest": manifest is not None,
+        "toolbox": toolbox_state(repo, releases, current_agents),
         "has_agents": bool(agent_runs),
         "pipeline": pipeline,
         "package": {"id": package_id, "version": nuget_version, "published": nuget_date},
@@ -202,10 +272,19 @@ def collect_repo(repo, since):
 
 def main():
     since = (datetime.now(timezone.utc) - timedelta(days=WINDOW_DAYS)).isoformat()
+    releases = toolbox_releases()
+    print(f"toolbox releases: {', '.join(n for n, _ in releases[:5])}")
+
+    # The published agent workflow, to tell "a newer release exists" apart from
+    # "the agents this repository runs are actually different".
+    import base64
+    current = api(f"repos/{ORG}/Evergine.Bindings/contents/workflows/binding-updater.md")
+    current_agents = base64.b64decode(current["content"]).decode("utf-8", "replace") if current else None
+
     repos, runs = [], []
     for repo in FLEET:
         print(f"→ {repo}")
-        summary, records = collect_repo(repo, since)
+        summary, records = collect_repo(repo, since, releases, current_agents)
         repos.append(summary)
         runs.extend(records)
 
@@ -216,8 +295,13 @@ def main():
         "window_days": WINDOW_DAYS,
         "repos": repos,
         "runs": sorted(runs, key=lambda r: r["ts"], reverse=True),
+        "toolbox_latest": releases[0][0] if releases else None,
         "totals": {
             "repos": len(repos),
+            "agents_outdated": sum(
+                1 for r in repos
+                if r.get("toolbox") and (r["toolbox"].get("behind") or 0) > 0
+            ),
             "with_agents": sum(1 for r in repos if r["has_agents"]),
             "with_manifest": sum(1 for r in repos if r["has_manifest"]),
             "agent_runs": len(runs),

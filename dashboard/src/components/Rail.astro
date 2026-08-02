@@ -1,6 +1,6 @@
 ---
 import data from "../data/agents-data.json";
-import { slug, daysSince, freshnessClass } from "../lib/format";
+import { slug, daysSince, freshnessClass, toolboxClass, toolboxLabel } from "../lib/format";
 
 interface Props { current?: string }
 const { current } = Astro.props;
@@ -30,7 +30,11 @@ const light = (c: string | null | undefined) =>
             ? <span class={freshnessClass(age)}>published {age}d ago</span>
             : <>&nbsp;</>}
         </div>
-        {r.has_agents && <span class="badge">agents</span>}
+        {r.toolbox && (
+          <span class:list={["chip", toolboxClass(r.toolbox.behind)]} title={toolboxLabel(r.toolbox)}>
+            {r.toolbox.version ?? "unknown"}
+          </span>
+        )}
       </a>
     );
   })}

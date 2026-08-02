@@ -3,7 +3,7 @@ import Base from "../../layouts/Base.astro";
 import Rail from "../../components/Rail.astro";
 import Runs from "../../components/Runs.astro";
 import data from "../../data/agents-data.json";
-import { slug, money, when, daysSince, freshnessClass } from "../../lib/format";
+import { slug, money, when, daysSince, freshnessClass, toolboxClass, toolboxLabel } from "../../lib/format";
 
 // One route per binding, generated at build time. Because these are real pages
 // the rail is a set of links and the site ships no client-side JavaScript.
@@ -23,6 +23,12 @@ const WATCHED = ["CI", "CD", "Sync standards"];
 
 const tiles = [
   { k: "NuGet", v: info.package?.version ?? "—", s: info.package?.id ?? "not published" },
+  {
+    k: "Agent toolbox",
+    v: info.toolbox?.version ?? "—",
+    s: info.toolbox ? toolboxLabel(info.toolbox) : "agents not installed",
+    cls: info.toolbox ? toolboxClass(info.toolbox.behind) : "",
+  },
   {
     k: "Freshness", v: age !== null ? `${age}d` : "—",
     s: "since last release", cls: freshnessClass(age),
