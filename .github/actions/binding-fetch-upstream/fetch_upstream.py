@@ -30,7 +30,29 @@ def fail(message):
     sys.exit(1)
 
 
+def normalise_eol(data):
+    """Collapse CRLF and lone CR to LF, for comparison only.
+
+    A Windows runner may check the working tree out with CRLF while the download
+    arrives with LF. Comparing raw bytes would then report a change on every run
+    for a file nobody touched -- and this action's caller commits, regenerates
+    and publishes on the strength of that answer. Never compare raw bytes.
+    """
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def detect_eol(data):
+    """Whichever line ending the vendored file already uses. Preserved on write
+    so refreshing a source never reformats the whole file."""
+    return b"\r\n" if b"\r\n" in data else b"\n"
+
+
+def apply_eol(data, eol):
+    return normalise_eol(data).replace(b"\n", eol) if eol == b"\r\n" else normalise_eol(data)
+
+
 def digest(path):
+    """Content hash, blind to line endings. See normalise_eol."""
     p = Path(path)
     if not p.exists():
         return None
@@ -41,9 +63,9 @@ def digest(path):
         for f in sorted(p.rglob("*")):
             if f.is_file():
                 h.update(str(f.relative_to(p)).encode())
-                h.update(f.read_bytes())
+                h.update(normalise_eol(f.read_bytes()))
         return h.hexdigest()
-    return hashlib.sha256(p.read_bytes()).hexdigest()
+    return hashlib.sha256(normalise_eol(p.read_bytes())).hexdigest()
 
 
 def http_get(url, accept=None):
@@ -148,8 +170,13 @@ def main():
             before = digest(source["path"])
             payload = fetcher(source)
             for dest, content in payload.items():
-                Path(dest).parent.mkdir(parents=True, exist_ok=True)
-                Path(dest).write_bytes(content)
+                target = Path(dest)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                # Keep whatever line ending the vendored file already uses, so a
+                # refresh changes the declarations and nothing else. A new file
+                # lands as downloaded.
+                eol = detect_eol(target.read_bytes()) if target.exists() else None
+                target.write_bytes(apply_eol(content, eol) if eol else content)
             after = digest(source["path"])
             same = before == after
             changed = changed or not same
