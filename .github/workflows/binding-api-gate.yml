@@ -176,7 +176,14 @@ jobs:
             # below picks it up as if it belonged to this side -- comparing an
             # assembly against itself and reporting no change.
             rm -rf "$outdir"
-            dotnet build "$PROJECT" -c "$CONFIG" -v q --nologo
+            # Dependencies copied beside the output, because the surface dumper has to
+            # resolve every referenced type and a library project does not copy package
+            # assemblies by default. Without this, ImGui.Net's references to
+            # Evergine.Mathematics were unresolvable: 420 of its 3,902 entries came back
+            # as <unresolved>, and before the dumper learned to degrade it aborted
+            # outright and the gate reported nothing at all.
+            dotnet build "$PROJECT" -c "$CONFIG" -v q --nologo \
+              -p:CopyLocalLockFileAssemblies=true
             mkdir -p ".api-gate/$label"
             # Every target framework the project produces is compared. A binding
             # that multi-targets can break one and not the other.
