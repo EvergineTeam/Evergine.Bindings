@@ -54,7 +54,13 @@ export function freshnessClass(days: number | null): string {
  *  somebody recompiles it, so a binding can sit on an old release indefinitely
  *  without a single red run to give it away.
  */
-export function toolboxClass(behind: number | null | undefined): string {
+export function toolboxClass(tb: any): string {
+  // Accepts the toolbox object, not just `behind`: a repository that only calls
+  // the reusable workflows has nothing pinned and so cannot be behind, but
+  // colouring it green would make it look like an agent repo that is up to date.
+  // Those are different facts and the chip should not blur them.
+  const behind = typeof tb === "number" ? tb : tb?.behind;
+  if (tb && typeof tb !== "number" && tb.consumer_only) return "idle";
   if (behind === null || behind === undefined) return "idle";
   if (behind === 0) return "ok";
   if (behind === 1) return "warn";
@@ -62,7 +68,14 @@ export function toolboxClass(behind: number | null | undefined): string {
 }
 
 export function toolboxLabel(tb: any): string {
-  if (!tb) return "no agents";
+  if (!tb) return "does not use the toolbox";
+  // No agents compiled here, but the toolbox's reusable workflows are called.
+  // There is no pin to drift: `uses: ...@v1` resolves the tag when the workflow
+  // runs, so this repository is on the current release by construction.
+  if (tb.consumer_only) {
+    const refs = (tb.workflow_refs ?? []).join(", ");
+    return `reusable workflows @${refs} · no agents, nothing to pin`;
+  }
   if (!tb.version) return "unknown pin";
   if (tb.behind === 0) return `${tb.version} · current`;
   const releases = tb.behind === 1 ? "1 release" : `${tb.behind} releases`;

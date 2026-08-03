@@ -85,6 +85,42 @@ def toolbox_releases():
     return sorted(releases, key=lambda r: key(r[0]), reverse=True)
 
 
+def consumer_state(repo):
+    """Whether a repository calls the toolbox's reusable workflows, and at which ref.
+
+    Used for the repositories that have no agents installed. They still run the
+    toolbox's CI, CD, upstream resolution and gates -- they just have nothing
+    compiled locally, so there is no pin to drift and nothing to be behind.
+    """
+    listing = api(f"repos/{ORG}/{repo}/contents/.github/workflows") or []
+    refs = set()
+    for entry in listing:
+        if not entry["name"].endswith((".yml", ".yaml")):
+            continue
+        content = api(f"repos/{ORG}/{repo}/contents/.github/workflows/{entry['name']}")
+        if not content or "content" not in content:
+            continue
+        import base64
+        import re as _re
+        text = base64.b64decode(content["content"]).decode("utf-8", "replace")
+        refs.update(_re.findall(
+            r"EvergineTeam/Evergine\.Bindings/\.github/workflows/[^@\s]+@(\S+)", text))
+
+    if not refs:
+        return None
+    return {
+        "sha": None,
+        # A moving tag, resolved per run. Reported as the ref rather than a
+        # release number, because that is what the repository actually declares.
+        "version": sorted(refs)[0] if len(refs) == 1 else "mixed",
+        "behind": 0,
+        "latest": None,
+        "agents_differ": None,
+        "consumer_only": True,
+        "workflow_refs": sorted(refs),
+    }
+
+
 def toolbox_state(repo, releases, current_agents):
     """Which toolbox release a repository's installed agents came from.
 
@@ -101,7 +137,16 @@ def toolbox_state(repo, releases, current_agents):
     """
     installed = api(f"repos/{ORG}/{repo}/contents/.github/workflows/binding-updater.md")
     if not installed:
-        return None
+        # No agents here, which is not the same as not using the toolbox. Most of
+        # the fleet consumes it through reusable workflows -- Meshoptimizer.NET
+        # calls five of them -- and reading only the agent pin reported the repo
+        # that leans on it hardest as not using it at all.
+        #
+        # A repository without agents cannot be behind, either: `uses: ...@v1`
+        # resolves the tag when the workflow runs, so it is on the current release
+        # by construction. Only the compiled agent locks are pinned to a commit,
+        # which is the whole reason the drift colouring exists.
+        return consumer_state(repo)
 
     import base64
     import re
@@ -260,7 +305,10 @@ def collect_repo(repo, since, releases, current_agents):
         # that has the agents but has not woken them yet still has them. Reading
         # runs made a freshly-installed repo look empty, which is exactly when
         # someone is most likely to be checking.
-        "has_agents": toolbox is not None,
+        # Agents installed, not merely the toolbox consumed. Those are different
+        # facts and conflating them is what made the dashboard claim the repository
+        # using five reusable workflows was not using the toolbox.
+        "has_agents": bool(toolbox) and not toolbox.get("consumer_only"),
         "pipeline": pipeline,
         "package": {"id": package_id, "version": nuget_version, "published": nuget_date},
         "prs": {
