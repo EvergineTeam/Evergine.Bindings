@@ -67,7 +67,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .coherence
-          for tool in check-native-coherence.py dump-exports.py check-exports-fresh.py; do
+          for tool in check-native-coherence.py dump-exports.py check-exports-fresh.py \
+                      check-native-arch.py; do
             gh api "repos/EvergineTeam/Evergine.Bindings/contents/tools/$tool?ref=${{ inputs.toolbox-ref }}" \
               -H 'Accept: application/vnd.github.raw' > ".coherence/$tool"
           done
@@ -82,6 +83,14 @@ jobs:
       - name: Check the exported definitions are fresh
         shell: bash
         run: python .coherence/check-exports-fresh.py "${{ inputs.manifest }}"
+
+      # A dimension the symbol check cannot see. Every symbol can be present in a
+      # library built for the wrong machine, so that check reports success while .NET,
+      # which picks by RID, loads nothing at all. ImGui.Net shipped an arm64 dylib
+      # under runtimes/osx-x64 for as long as anyone can tell.
+      - name: Check each library matches the architecture its RID promises
+        shell: bash
+        run: python .coherence/check-native-arch.py "${{ inputs.manifest }}"
 
       - name: Check every declaration resolves
         shell: bash
