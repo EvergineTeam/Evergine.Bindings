@@ -157,6 +157,22 @@ on:
         required: false
         type: boolean
         default: false
+      publish-only:
+        description: >-
+          Package and publish the repository exactly as it stands, without consulting
+          upstream at all. For the case where a revision has been reviewed, merged and
+          tried by a human, and upstream has moved on since -- force-publish cannot do
+          this, because it still fetches first and would ship the newer sources.
+
+          ImGui.Net needed it the day it was onboarded: cimgui moved twice in one
+          afternoon and the second move did not compile, so the only publishable state
+          was the one already on main.
+
+          Implies force-publish, and refuses to run if regeneration would change
+          anything, since that would mean publishing something main does not contain.
+        required: false
+        type: boolean
+        default: false
       publish-enabled:
         description: 'Publish to Nuget.org'
         required: false
@@ -196,6 +212,7 @@ jobs:
 
       - name: Fetch upstream sources
         id: upstream
+        if: ${{ !inputs.publish-only }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-fetch-upstream@v1
         with:
           manifest: ${{ inputs.manifest }}
@@ -298,12 +315,26 @@ jobs:
             Write-Host "Upstream may have moved but the generated API did not. Nothing to publish."
           }
 
+      # publish-only claims the tree is already the thing to ship. If regeneration
+      # disagrees, that claim is false: main holds vendored inputs and generated output
+      # that do not match, and packaging would quietly ship the generator's opinion
+      # instead of the reviewed commit. Say so rather than publish it.
+      - name: Refuse publish-only when regeneration changes the tree
+        if: ${{ inputs.publish-only && steps.generated.outputs.generated_changed == 'true' }}
+        shell: bash
+        run: |
+          echo "::error::publish-only was requested, but regenerating changed the tree."
+          echo "::error::main is not self-consistent, so there is no reviewed state to ship."
+          echo "Commit the regenerated output first, then publish."
+          exit 1
+
       # Committed after generation, not before, so the registry and the code
       # generated from them land in the same commit. Committing the sources first
       # is why Vulkan.NET's checked-in Generated/ sat four months behind its own
       # vk.xml while every published package was correct: the regenerated output
       # was packed and then discarded.
       - name: Commit upstream sources and regenerated bindings
+        if: ${{ !inputs.publish-only }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/commit-and-push-or-pr-update@v1
         with:
           commit_message: >-
@@ -317,7 +348,7 @@ jobs:
           pr_body: "Automated update of upstream sources for binding ${{ inputs.generator-name }}."
 
       - name: Generate NuGets
-        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish
+        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only
         uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-nugets-dotnet@v1
         with:
           script-path: ${{ inputs.nugets-script-path }}
@@ -334,12 +365,12 @@ jobs:
           symbols-format: ${{ inputs.symbols-format }}
 
       - name: List generated NuGets
-        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish
+        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only
         run: |
           ls ${{ inputs.output-folder }}/*.nupkg
 
       - name: Publish NuGet
-        if: ${{ success() && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish) }}
+        if: ${{ success() && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only) }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/nuget-publish@v1
         with:
           packages-folder: ${{ inputs.output-folder }}
