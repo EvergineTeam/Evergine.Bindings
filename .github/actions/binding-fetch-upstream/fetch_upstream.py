@@ -280,6 +280,25 @@ def main():
         )
 
     if RESOLVE_ONLY:
+        # Submodule manifests have no release block, so resolve_release said nothing
+        # moved and callers skipped the work -- while the fetch that runs later, in
+        # normal mode, went ahead and bumped. ImGui.Net landed four bumped pointers,
+        # refreshed definitions and regenerated bindings on main with the native
+        # libraries left at the old revision: 24 declared symbols exported by nothing.
+        # Exactly the mismatch this adapter exists to prevent.
+        if kind == "git-submodule":
+            for source in upstream["sources"]:
+                local_sha, head = submodule_state(source)
+                same = local_sha == head
+                ref_moved = ref_moved or not same
+                lines.append(
+                    f"- `{source['path']}` ({source['repo']}): "
+                    f"{'up to date' if same else '**behind upstream**'}  \n"
+                    f"  recorded `{(local_sha or 'unknown')[:12]}` / "
+                    f"upstream `{head[:12]}`\n"
+                )
+            resolved_ref = resolved_ref or ("moved" if ref_moved else "")
+
         lines.append("\n_Resolve-only: nothing fetched, nothing written._\n")
         REPORT_PATH.write_text("".join(lines), encoding="utf-8")
         print("".join(lines))
