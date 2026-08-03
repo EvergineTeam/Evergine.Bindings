@@ -191,9 +191,9 @@ def fetch_git_tree(source, resolved_ref=None):
 def submodule_state(source):
     """Compare the recorded submodule SHA with the upstream head.
 
-    Deliberately does not check anything out. For KTX.NET and ImGui.Net a pointer
-    bump means rebuilding native binaries or moving four interdependent modules
-    together, so this adapter reports and stops -- the manifests say as much.
+    Reads only. Whether the pointer then moves is decided by `upstream.bump`, which
+    defaults to reporting, because for some bindings a bump means rebuilding native
+    binaries for every platform they ship.
     """
     path = source["path"]
     repo = source.get("repo") or fail("git-submodule source is missing `repo`")
@@ -208,6 +208,55 @@ def submodule_state(source):
         http_get(f"https://api.github.com/repos/{repo}/commits/{info['default_branch']}")
     )["sha"]
     return local_sha, head
+
+
+def git(args, cwd=None):
+    """Run git, failing loudly. A half-moved set of submodules is worse than none."""
+    result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    if result.returncode != 0:
+        fail(f"git {' '.join(args)} failed: {result.stderr.strip() or result.stdout.strip()}")
+    return result.stdout
+
+
+def bump_submodule(path, sha):
+    """Move one submodule to a revision.
+
+    The working copy may be shallow, so ask for the single commit rather than the
+    whole history; a checkout is not enough on its own when the object is absent.
+    """
+    if not Path(path, ".git").exists() and not Path(path).is_dir():
+        fail(f"{path} is not checked out -- the caller must clone submodules")
+    try:
+        git(["fetch", "--depth", "1", "origin", sha], cwd=path)
+    except SystemExit:
+        git(["fetch", "origin"], cwd=path)
+    git(["checkout", "--detach", sha], cwd=path)
+
+
+def apply_exports(source):
+    """Copy declared files out of the submodule into the repository.
+
+    These are the generated definitions the C# generators read. They live inside the
+    submodule already, so copying them from there -- rather than fetching them
+    separately -- makes it impossible for the definitions and the binaries built from
+    the same revision to disagree. Before this existed the copy was a documented
+    manual step, and nothing failed when it was skipped.
+    """
+    copied = []
+    for export in source.get("exports", []):
+        src = Path(source["path"]) / export["from"]
+        dest = Path(export["to"])
+        if not src.exists():
+            fail(f"export source {src} not found after bumping {source['path']}")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # Keep whatever line ending the destination already uses, for the same reason
+        # every other write in this file does: a Windows runner would otherwise
+        # rewrite the whole file and report a change nobody made.
+        eol = detect_eol(dest.read_bytes()) if dest.exists() else None
+        content = src.read_bytes()
+        dest.write_bytes(apply_eol(content, eol) if eol else content)
+        copied.append(str(dest))
+    return copied
 
 
 def main():
@@ -243,19 +292,47 @@ def main():
         return
 
     if kind == "git-submodule":
+        bump = upstream.get("bump", "report-only")
+        if bump not in ("report-only", "together"):
+            fail(f"unknown upstream.bump '{bump}' (expected report-only or together)")
+
+        # Every head is resolved before anything moves. Under `together` the set has to
+        # land as one revision: these submodules compile into a single binary and share
+        # C++ headers, so a half-applied bump is a combination upstream never built.
+        states = []
         for source in upstream["sources"]:
             local_sha, head = submodule_state(source)
             same = local_sha == head
             changed = changed or not same
+            states.append((source, local_sha, head, same))
             state = "up to date" if same else "**behind upstream**"
             lines.append(
                 f"- `{source['path']}` ({source['repo']}): {state}  \n"
                 f"  recorded `{(local_sha or 'unknown')[:12]}` / upstream `{head[:12]}`\n"
             )
-        lines.append(
-            "\n> A submodule bump is never automatic here. Report it and stop unless the "
-            "manifest explicitly says otherwise.\n"
-        )
+
+        if bump == "report-only":
+            lines.append(
+                "\n> `bump: report-only`. Report it and stop -- moving this pointer means "
+                "rebuilding native binaries, which is not this step's job.\n"
+            )
+        elif changed:
+            for source, _, head, _ in states:
+                bump_submodule(source["path"], head)
+            exported = []
+            for source, _, _, _ in states:
+                exported += apply_exports(source)
+            lines.append(
+                f"\n**Bumped {len(states)} submodule(s) as a set.**\n"
+            )
+            if exported:
+                lines.append(
+                    f"Copied {len(exported)} declared file(s) out of the submodules, so the "
+                    f"definitions and the binaries come from the same revision:\n"
+                    + "".join(f"- `{p}`\n" for p in exported)
+                )
+        else:
+            lines.append("\nAll submodules already at upstream head.\n")
     else:
         fetcher = {"http-file": fetch_http_file, "git-tree": fetch_git_tree}.get(kind)
         if fetcher is None:
@@ -314,6 +391,12 @@ def main():
         for source in upstream.get("sources", []):
             if source.get("path"):
                 fh.write(f"{source['path']}\n")
+            # Export destinations are fetched sources too -- copied out of a submodule
+            # rather than downloaded, but not generator output. Left out, the caller
+            # would read them as a changed API and publish on a definitions refresh
+            # that regenerated to identical code.
+            for export in source.get("exports", []):
+                fh.write(f"{export['to']}\n")
         fh.write("__EOF__\n")
 
 

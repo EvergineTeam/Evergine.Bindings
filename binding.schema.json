@@ -60,6 +60,11 @@
           "enum": ["git-tag", "git-release", "submodule-sha", "spec-attribute", "none"],
           "description": "How to determine which upstream version the vendored spec corresponds to."
         },
+        "bump": {
+          "enum": ["report-only", "together"],
+          "default": "report-only",
+          "description": "For kind: git-submodule. report-only (default): compare the recorded pointer against upstream and stop, because moving it means rebuilding native binaries. together: move every submodule to its upstream head as one set, so a binding whose submodules compile into a single library never lands a combination upstream never built."
+        },
         "release": {
           "type": "object",
           "additionalProperties": false,
@@ -108,7 +113,20 @@
               },
               "path": {
                 "type": "string",
-                "description": "Destination path in this repository, relative to the root."
+                "description": "Destination path in this repository, relative to the root. For kind: git-submodule this is the mount point."
+              },
+              "exports": {
+                "type": "array",
+                "description": "For kind: git-submodule. Files to copy out of the submodule after bumping it -- typically the generated definitions the code generator reads. Because they come from the submodule rather than being fetched separately, the definitions and the binaries built from that same revision cannot disagree. Their destinations are reported as fetched sources, not generator output.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["from", "to"],
+                  "properties": {
+                    "from": { "type": "string", "description": "Path inside the submodule." },
+                    "to": { "type": "string", "description": "Destination in this repository, relative to the root." }
+                  }
+                }
               },
               "format": {
                 "enum": ["khronos-xml", "c-header", "webidl", "json-registry", "other"],
