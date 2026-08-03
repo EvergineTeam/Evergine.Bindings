@@ -49,6 +49,14 @@ outputs:
   ref_moved:
     description: "true when the tracked release differs from the vendored one"
     value: ${{ steps.fetch.outputs.ref_moved }}
+  submodule_heads:
+    description: >-
+      JSON object of submodule path to upstream head SHA, for kind: git-submodule in
+      resolve-only mode. Whoever builds native binaries needs it to compile the same
+      revision the run will commit: checking out the recorded pointers gives the old
+      ones, since the bump happens later, and the libraries then belong to the revision
+      being replaced.
+    value: ${{ steps.fetch.outputs.submodule_heads }}
 
 runs:
   using: composite

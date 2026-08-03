@@ -35,6 +35,9 @@ on:
       ref_moved:
         description: 'true when the tracked release differs from the vendored one'
         value: ${{ jobs.resolve.outputs.ref_moved }}
+      submodule_heads:
+        description: 'JSON of submodule path to upstream head, so a native build can compile the revision this run will commit rather than the one it replaces'
+        value: ${{ jobs.resolve.outputs.submodule_heads }}
 
 permissions:
   contents: read
@@ -46,6 +49,7 @@ jobs:
       resolved_ref: ${{ steps.upstream.outputs.resolved_ref }}
       previous_ref: ${{ steps.upstream.outputs.previous_ref }}
       ref_moved: ${{ steps.upstream.outputs.ref_moved }}
+      submodule_heads: ${{ steps.upstream.outputs.submodule_heads }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
