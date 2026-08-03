@@ -18,6 +18,14 @@ inputs:
     description: "Token used to read upstream repositories for the git-tree adapter"
     required: false
     default: ${{ github.token }}
+  resolve-only:
+    description: >-
+      Resolve the tracked release and report, without fetching anything or
+      touching the working tree. A binding that ships native binaries has to
+      know which revision it is heading for before it can decide whether to
+      spend a multi-platform build on it.
+    required: false
+    default: "false"
 
 outputs:
   changed:
@@ -32,6 +40,15 @@ outputs:
       these to tell fetched sources apart from generator output when deciding
       what changed, and taking them from here avoids re-parsing YAML in a shell.
     value: ${{ steps.fetch.outputs.paths }}
+  resolved_ref:
+    description: "Upstream revision this binding should be on, once release tracking is applied"
+    value: ${{ steps.fetch.outputs.resolved_ref }}
+  previous_ref:
+    description: "Revision recorded as vendored before this run"
+    value: ${{ steps.fetch.outputs.previous_ref }}
+  ref_moved:
+    description: "true when the tracked release differs from the vendored one"
+    value: ${{ steps.fetch.outputs.ref_moved }}
 
 runs:
   using: composite
@@ -43,6 +60,7 @@ runs:
         MANIFEST: ${{ inputs.manifest }}
         REPORT_PATH: ${{ inputs.report-path }}
         GH_TOKEN: ${{ inputs.github-token }}
+        RESOLVE_ONLY: ${{ inputs.resolve-only }}
       run: |
         set -euo pipefail
         # Windows runners ship `python`, not `python3`, and `pip` is not always on

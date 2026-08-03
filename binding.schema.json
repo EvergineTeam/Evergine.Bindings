@@ -60,6 +60,26 @@
           "enum": ["git-tag", "git-release", "submodule-sha", "spec-attribute", "none"],
           "description": "How to determine which upstream version the vendored spec corresponds to."
         },
+        "release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["track"],
+          "description": "Follow tagged releases instead of a branch. A binding that ships native binaries needs this: the header and the libraries have to come from the same revision, and a branch is a moving target.",
+          "properties": {
+            "track": {
+              "enum": ["stable", "latest", "pinned"],
+              "description": "stable: the newest published non-prerelease release, as decided by the upstream author. latest: the newest release including prereleases. pinned: stay on `current` until a human moves it."
+            },
+            "current": {
+              "type": "string",
+              "description": "Tag currently vendored. Rewritten by binding-fetch-upstream when it brings in a newer release, so this is the single place the version lives."
+            },
+            "repo": {
+              "type": "string",
+              "description": "owner/name to read releases from. Defaults to the repo of the first source that declares one."
+            }
+          }
+        },
         "sources": {
           "type": "array",
           "minItems": 1,
@@ -80,7 +100,7 @@
               },
               "ref": {
                 "type": "string",
-                "description": "Branch, tag or SHA to read from. Required for kind: git-tree."
+                "description": "Branch, tag or SHA to read from. For kind: git-tree, either this or an upstream.release block must supply one; an explicit ref here wins, so a manifest can pin one source while the rest follow the tracked release."
               },
               "remote-path": {
                 "type": "string",

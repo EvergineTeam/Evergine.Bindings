@@ -1,0 +1,72 @@
+name: Binding Resolve Upstream (Reusable)
+
+description: >
+  Answers "which upstream revision should this binding be on, and has it moved?"
+  without fetching anything.
+
+  Bindings that ship native binaries need the answer before they act on it. The
+  header and the libraries have to come from the same revision, so a version bump
+  costs a multi-platform native build -- and that is not something to spend on a
+  maybe. This job resolves the tracked release, and the caller decides.
+
+  It also removes a class of disagreement: one job decides the revision and the
+  others consume it, so a release published midway through a run cannot leave the
+  header on one version and the binaries on another.
+
+on:
+  workflow_call:
+    inputs:
+      manifest:
+        description: 'Path to the binding manifest'
+        required: false
+        type: string
+        default: 'binding.yml'
+      runner-os:
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+    outputs:
+      resolved_ref:
+        description: 'Revision this binding should be on'
+        value: ${{ jobs.resolve.outputs.resolved_ref }}
+      previous_ref:
+        description: 'Revision recorded as vendored'
+        value: ${{ jobs.resolve.outputs.previous_ref }}
+      ref_moved:
+        description: 'true when the tracked release differs from the vendored one'
+        value: ${{ jobs.resolve.outputs.ref_moved }}
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ${{ inputs.runner-os }}
+    outputs:
+      resolved_ref: ${{ steps.upstream.outputs.resolved_ref }}
+      previous_ref: ${{ steps.upstream.outputs.previous_ref }}
+      ref_moved: ${{ steps.upstream.outputs.ref_moved }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Resolve the tracked release
+        id: upstream
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-fetch-upstream@v1
+        with:
+          manifest: ${{ inputs.manifest }}
+          report-path: ${{ runner.temp }}/upstream-resolve.md
+          resolve-only: 'true'
+
+      - name: Summarise
+        shell: bash
+        run: |
+          {
+            echo "### Upstream release"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Vendored | \`${{ steps.upstream.outputs.previous_ref || 'none recorded' }}\` |"
+            echo "| Resolved | \`${{ steps.upstream.outputs.resolved_ref || 'not tracking releases' }}\` |"
+            echo "| Moved | ${{ steps.upstream.outputs.ref_moved }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
