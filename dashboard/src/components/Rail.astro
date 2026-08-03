@@ -31,7 +31,7 @@ const light = (c: string | null | undefined) =>
             : <>&nbsp;</>}
         </div>
         {r.toolbox && (
-          <span class:list={["chip", toolboxClass(r.toolbox.behind)]} title={toolboxLabel(r.toolbox)}>
+          <span class:list={["chip", toolboxClass(r.toolbox)]} title={toolboxLabel(r.toolbox)}>
             {r.toolbox.version ?? "unknown"}
           </span>
         )}

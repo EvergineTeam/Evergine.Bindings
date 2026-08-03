@@ -27,7 +27,7 @@ const tiles = [
     k: "Agent toolbox",
     v: info.toolbox?.version ?? "—",
     s: info.toolbox ? toolboxLabel(info.toolbox) : "agents not installed",
-    cls: info.toolbox ? toolboxClass(info.toolbox.behind) : "",
+    cls: info.toolbox ? toolboxClass(info.toolbox) : "",
   },
   {
     k: "Freshness", v: age !== null ? `${age}d` : "—",
