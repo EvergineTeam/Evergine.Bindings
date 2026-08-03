@@ -119,6 +119,19 @@ on:
         required: false
         type: string
         default: 'build/scripts/Helpers.ps1'
+      checkout-submodules:
+        description: >-
+          Passed straight to actions/checkout. Required by any manifest whose upstream
+          is `kind: git-submodule` with `bump: together`, because moving a pointer means
+          fetching inside the submodule and there is nothing to fetch in if it was never
+          checked out.
+
+          `true` is usually enough: the declared sources and their exported definitions
+          sit at the top level of each submodule, so recursing costs clone time and adds
+          more that can fail.
+        required: false
+        type: string
+        default: 'false'
       natives-artifact-pattern:
         description: >-
           Artifact name pattern holding native binaries built earlier in this run,
@@ -178,6 +191,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          submodules: ${{ inputs.checkout-submodules }}
 
       - name: Fetch upstream sources
         id: upstream
