@@ -83,20 +83,6 @@ const behindRepos = data.repos.filter((r: any) => r.toolbox && (r.toolbox.behind
     ))}
   </div>
 
-  {stale.length > 0 && (
-    <>
-      <h2>Not publishing</h2>
-      <div class="empty" style="text-align:left">
-        {stale.length} of {data.repos.length} repositories have not published in over {STALE_DAYS} days:
-        <strong> {stale.map((r: any) => r.repo).join(", ")}</strong>.
-        <br /><br />
-        Worth knowing why before reading it as neglect: only the XML-driven bindings run their
-        CD on a schedule. The rest publish when somebody dispatches the workflow by hand, so a
-        gap here means nobody pressed the button, not that a job failed.
-      </div>
-    </>
-  )}
-
   <h2>Recent agent activity</h2>
   <Runs runs={data.runs} />
 </Base>
