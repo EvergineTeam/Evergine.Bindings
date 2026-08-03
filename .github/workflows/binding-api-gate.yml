@@ -57,6 +57,24 @@ on:
         required: false
         type: boolean
         default: false
+      exempt-symbols:
+        description: >-
+          Extended-regex patterns, one per line, for symbols whose change must not
+          count as breaking.
+
+          Intended for the version constant that upstream bumps on every release.
+          Tracking constant *values* is what catches a silent renumbering, and it
+          also means a header that reports its own version turns every single
+          release into a breaking change -- Meshoptimizer's `VERSION = 1000`
+          becoming `1020` was reported as one symbol removed and one added. Left
+          alone the verdict is always "breaking", which is the same as having no
+          verdict.
+
+          Use it only for symbols that are *meant* to change every release. A
+          pattern here means a genuine removal of that symbol goes unreported too.
+        required: false
+        type: string
+        default: ''
       agent-label:
         description: 'Only pull requests carrying this label are eligible to merge'
         required: false
@@ -155,14 +173,29 @@ jobs:
       - name: Compare the surfaces
         id: diff
         shell: bash
+        env:
+          EXEMPT: ${{ inputs.exempt-symbols }}
         run: |
           set -uo pipefail
           verdict="additive"; total_add=0; total_rem=0
           : > .api-gate/report.md
 
-          for basetxt in .api-gate/base/*.txt; do
-            tfm=$(basename "$basetxt" .txt)
-            headtxt=".api-gate/head/$tfm.txt"
+          # Applied to both sides before comparison, so an exempt symbol cannot
+          # appear as either an addition or a removal.
+          printf '%s\n' "$EXEMPT" | grep -v '^[[:space:]]*$' > .api-gate/exempt.txt || true
+          if [ -s .api-gate/exempt.txt ]; then
+            echo "Exempt patterns:"; sed 's/^/  /' .api-gate/exempt.txt
+            filter () { grep -Ev -f .api-gate/exempt.txt "$1" || true; }
+          else
+            filter () { cat "$1"; }
+          fi
+
+          for raw_base in .api-gate/base/*.txt; do
+            tfm=$(basename "$raw_base" .txt)
+            filter "$raw_base" > ".api-gate/base/$tfm.filtered"
+            [ -f ".api-gate/head/$tfm.txt" ] && filter ".api-gate/head/$tfm.txt" > ".api-gate/head/$tfm.filtered"
+            basetxt=".api-gate/base/$tfm.filtered"
+            headtxt=".api-gate/head/$tfm.filtered"
             if [ ! -f "$headtxt" ]; then
               echo "- \`$tfm\`: **target framework removed**" >> .api-gate/report.md
               verdict="breaking"; continue
