@@ -269,6 +269,7 @@ def main():
     lines = [f"# Upstream check\n", f"Adapter: `{kind}`  \n"]
     changed = False
 
+    submodule_heads = ""
     resolved_ref, previous_ref, ref_moved = resolve_release(upstream)
     if resolved_ref:
         track = upstream["release"].get("track", "pinned")
@@ -287,10 +288,12 @@ def main():
         # libraries left at the old revision: 24 declared symbols exported by nothing.
         # Exactly the mismatch this adapter exists to prevent.
         if kind == "git-submodule":
+            heads = {}
             for source in upstream["sources"]:
                 local_sha, head = submodule_state(source)
                 same = local_sha == head
                 ref_moved = ref_moved or not same
+                heads[source["path"]] = head
                 lines.append(
                     f"- `{source['path']}` ({source['repo']}): "
                     f"{'up to date' if same else '**behind upstream**'}  \n"
@@ -298,6 +301,12 @@ def main():
                     f"upstream `{head[:12]}`\n"
                 )
             resolved_ref = resolved_ref or ("moved" if ref_moved else "")
+            # Handed to whoever builds the native libraries, so they compile the same
+            # revision this run is going to commit. Without it that job checks out the
+            # recorded pointers -- the old ones, since the bump happens later -- and
+            # produces libraries for the revision being replaced. The result passes
+            # every gate and is exactly the mismatch the gates exist to prevent.
+            submodule_heads = json.dumps(heads, sort_keys=True)
 
         lines.append("\n_Resolve-only: nothing fetched, nothing written._\n")
         REPORT_PATH.write_text("".join(lines), encoding="utf-8")
@@ -308,6 +317,7 @@ def main():
             fh.write(f"resolved_ref={resolved_ref or ''}\n")
             fh.write(f"previous_ref={previous_ref or ''}\n")
             fh.write(f"ref_moved={'true' if ref_moved else 'false'}\n")
+            fh.write(f"submodule_heads={submodule_heads}\n")
         return
 
     if kind == "git-submodule":
