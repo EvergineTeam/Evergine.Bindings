@@ -1,0 +1,67 @@
+name: Binding Native Coherence (Reusable)
+
+description: >
+  Checks that every P/Invoke the managed binding declares exists in the native
+  libraries the package ships, on every platform it ships them for.
+
+  This is the failure a binding carrying native binaries cannot afford and that
+  nothing else catches. P/Invoke binds late: a declaration naming a symbol the
+  library does not export compiles cleanly, passes CI, packs, publishes, and
+  throws EntryPointNotFoundException the first time a consumer calls it. The
+  header and the libraries being one release apart is enough to cause it, and
+  there is no build error anywhere along the way.
+
+  A static check rather than a smoke test, deliberately. A smoke test calls the
+  two or three functions someone thought to write down, on whichever platform CI
+  happens to run. This compares every declaration against every shipped library
+  from a single machine -- for Meshoptimizer.NET, 84 symbols across five
+  platforms instead of a sample of one.
+
+  It says nothing about whether a function behaves correctly. It says the call
+  will bind, which is the half that fails in silence.
+
+on:
+  workflow_call:
+    inputs:
+      manifest:
+        required: false
+        type: string
+        default: 'binding.yml'
+      toolbox-ref:
+        required: false
+        type: string
+        default: 'v1'
+      runner-os:
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+
+permissions:
+  contents: read
+
+jobs:
+  coherence:
+    runs-on: ${{ inputs.runner-os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Fetch the checker from the toolbox
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .coherence
+          for tool in check-native-coherence.py dump-exports.py; do
+            gh api "repos/EvergineTeam/Evergine.Bindings/contents/tools/$tool?ref=${{ inputs.toolbox-ref }}" \
+              -H 'Accept: application/vnd.github.raw' > ".coherence/$tool"
+          done
+          # Reading PE, ELF and Mach-O directly rather than shelling out to nm or
+          # dumpbin: those are not on every runner, and their prose has to be
+          # scraped, which reported a DLL's own name as an exported symbol.
+          python -m pip install --quiet pefile pyelftools macholib pyyaml
+
+      - name: Check every declaration resolves
+        shell: bash
+        run: python .coherence/check-native-coherence.py "${{ inputs.manifest }}"
