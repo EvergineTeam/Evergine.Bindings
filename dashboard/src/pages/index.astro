@@ -3,7 +3,7 @@ import Base from "../layouts/Base.astro";
 import Rail from "../components/Rail.astro";
 import Runs from "../components/Runs.astro";
 import data from "../data/agents-data.json";
-import { money, daysSince, STALE_DAYS, toolboxLabel } from "../lib/format";
+import { money, daysSince, STALE_DAYS } from "../lib/format";
 
 const t: any = data.totals;
 
@@ -44,8 +44,6 @@ const tiles = [
     cls: (t.agents_outdated ?? 0) ? "warn" : "good",
   },
 ];
-
-const behindRepos = data.repos.filter((r: any) => r.toolbox && (r.toolbox.behind ?? 0) > 0);
 ---
 <Base title="Evergine Bindings — fleet status">
   <p class="lede">
@@ -59,18 +57,6 @@ const behindRepos = data.repos.filter((r: any) => r.toolbox && (r.toolbox.behind
     <span><i class="swatch bad"></i> two or more behind</span>
   </div>
   <Rail />
-
-  {behindRepos.length > 0 && (
-    <div class="empty" style="text-align:left;margin-top:4px">
-      {behindRepos.length} repositor{behindRepos.length === 1 ? "y is" : "ies are"} pinned to an
-      older toolbox: {behindRepos.map((r: any) => `${r.repo} (${toolboxLabel(r.toolbox)})`).join(", ")}.
-      <br /><br />
-      Moving the <code>v1</code> tag does not update anything on its own — a repository keeps the
-      commit it was compiled against until somebody runs <code>gh aw add … --force</code> and
-      recompiles. That is the lock file working as intended, and it is also why this gap would be
-      invisible without a column for it: an out-of-date pin produces no failing run.
-    </div>
-  )}
 
   <h2>Health</h2>
   <div class="tiles">
