@@ -75,6 +75,21 @@ on:
         required: false
         type: string
         default: ''
+      native-coherence:
+        description: >-
+          Also check that every P/Invoke resolves in the native libraries the
+          package ships, and make the merge depend on it.
+
+          Required for any binding that carries native binaries, because the agent
+          that opens these pull requests runs the generator and not the native
+          build. Regenerating against a newer header leaves the old libraries in
+          place, which reads as purely additive to the API gate -- new symbols, none
+          removed -- while every one of those new symbols is missing from the
+          binaries. Run as a separate workflow beside this one, the check would go
+          red and the merge would proceed anyway.
+        required: false
+        type: boolean
+        default: false
       agent-label:
         description: 'Only pull requests carrying this label are eligible to merge'
         required: false
@@ -286,11 +301,25 @@ jobs:
 
   # Separate job so the merge decision is readable on its own, and so a failure
   # to merge never masks the measurement.
+  # Inside this workflow rather than beside it, so the merge below can depend on
+  # its result. A green API verdict says nothing about whether the symbols it
+  # counted as additions actually exist in the shipped libraries.
+  coherence:
+    if: inputs.native-coherence
+    uses: EvergineTeam/Evergine.Bindings/.github/workflows/binding-native-coherence.yml@v1
+
   merge:
-    needs: gate
+    needs: [gate, coherence]
+    # `always()` because `coherence` is skipped when the input is false, and a
+    # skipped dependency would otherwise take this job with it. `!= 'failure'`
+    # rather than `== 'success'` for the same reason: skipped must pass, failed
+    # must not.
     if: >
+      always() && !cancelled() &&
       inputs.auto-merge &&
+      needs.gate.result == 'success' &&
       needs.gate.outputs.verdict == 'additive' &&
+      needs.coherence.result != 'failure' &&
       github.event.pull_request.user.login == 'github-actions[bot]' &&
       contains(github.event.pull_request.labels.*.name, inputs.agent-label) &&
       !contains(github.event.pull_request.labels.*.name, 'needs-human-review')
