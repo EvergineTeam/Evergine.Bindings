@@ -214,6 +214,32 @@ jobs:
           merge-multiple: true
           path: .
 
+      # Refuse to carry on when upstream moved, this package ships native binaries, and
+      # none were handed over. Regenerating against new sources while the libraries stay
+      # at the old revision produces a package that compiles, passes every managed
+      # check, publishes, and throws EntryPointNotFoundException in the consumer's
+      # application.
+      #
+      # ImGui.Net landed exactly that on main: four bumped submodules, refreshed
+      # definitions, regenerated bindings, old libraries, 24 declared symbols exported
+      # by nothing. The caller's condition for building them was wrong; this is the
+      # backstop that should have made the mistake loud instead of silent.
+      - name: Refuse a source bump with no matching native rebuild
+        if: steps.upstream.outputs.changed == 'true' && inputs.natives-artifact-pattern == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          project='${{ inputs.binding-project }}'
+          runtimes="$(dirname "$project")/runtimes"
+          if [ -d "$runtimes" ]; then
+            echo "::error::upstream moved and $runtimes exists, but no native artifacts"
+            echo "::error::were supplied. Committing now would ship a managed layer built"
+            echo "::error::from one revision against libraries built from another."
+            echo "Pass natives-artifact-pattern, or force the job that builds them."
+            exit 1
+          fi
+          echo "No $runtimes in this package; nothing to keep in step."
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
