@@ -264,15 +264,25 @@ jobs:
           } > .api-gate/comment.md
           gh pr comment "${{ github.event.pull_request.number }}" --body-file .api-gate/comment.md
 
-      - name: Label a breaking change
-        if: steps.diff.outputs.verdict == 'breaking'
+      # Set *and cleared*, because the label outlives the run that applied it. A
+      # pull request pushed again after a fix would keep advertising a break it no
+      # longer has, and a reviewer reading the label rather than the comment would
+      # be misled by the gate instead of informed by it.
+      - name: Label the verdict
         env:
           GH_TOKEN: ${{ github.token }}
+          VERDICT: ${{ steps.diff.outputs.verdict }}
         shell: bash
         run: |
-          gh label create 'api:breaking' -R "${{ github.repository }}" \
-            -c 'B60205' -d 'Removes or changes public API symbols' 2>/dev/null || true
-          gh pr edit "${{ github.event.pull_request.number }}" --add-label 'api:breaking'
+          set -euo pipefail
+          pr="${{ github.event.pull_request.number }}"
+          if [ "$VERDICT" = "breaking" ]; then
+            gh label create 'api:breaking' -R "${{ github.repository }}" \
+              -c 'B60205' -d 'Removes or changes public API symbols' 2>/dev/null || true
+            gh pr edit "$pr" --add-label 'api:breaking'
+          else
+            gh pr edit "$pr" --remove-label 'api:breaking' 2>/dev/null || true
+          fi
 
   # Separate job so the merge decision is readable on its own, and so a failure
   # to merge never masks the measurement.
