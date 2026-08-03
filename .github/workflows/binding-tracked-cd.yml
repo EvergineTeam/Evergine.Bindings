@@ -119,6 +119,22 @@ on:
         required: false
         type: string
         default: 'build/scripts/Helpers.ps1'
+      natives-artifact-pattern:
+        description: >-
+          Artifact name pattern holding native binaries built earlier in this run,
+          unpacked over the working tree before the change is detected and
+          committed.
+
+          For a binding that ships native libraries the header and those binaries
+          have to move together. Building them cannot happen in this job -- it
+          takes a matrix across three operating systems -- so a caller runs that
+          first and hands the results here. Each artifact must already be laid out
+          at its final path in the repository, so unpacking is the whole mapping.
+
+          Empty by default, which leaves every existing caller untouched.
+        required: false
+        type: string
+        default: ''
       force-publish:
         description: >-
           Publish even when the generated code is unchanged. For shipping work a
@@ -168,6 +184,20 @@ jobs:
         uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-fetch-upstream@v1
         with:
           manifest: ${{ inputs.manifest }}
+
+      # Placed between the fetch and the detection so the binaries land in the
+      # same commit as the header they were built from. Splitting them across two
+      # commits would leave main briefly holding a package that compiles, passes
+      # CI, and throws in the consumer's application.
+      - name: Collect native binaries built earlier in this run
+        if: inputs.natives-artifact-pattern != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.natives-artifact-pattern }}
+          # Each artifact already carries its final repository path, so merging
+          # them over the working tree is the entire mapping step.
+          merge-multiple: true
+          path: .
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
