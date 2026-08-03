@@ -35,6 +35,18 @@ on:
         required: false
         type: string
         default: 'ubuntu-latest'
+      checkout-submodules:
+        description: >-
+          Passed straight to actions/checkout. Needed when the manifest declares
+          `exports`, because the freshness check compares each copied file against the
+          submodule it came from and cannot tell fresh from stale without it.
+
+          `true` is usually enough -- the exported definitions sit at the top level of
+          each submodule, so recursing into their own submodules only adds clone time
+          and more that can fail.
+        required: false
+        type: string
+        default: 'false'
 
 permissions:
   contents: read
@@ -45,6 +57,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          submodules: ${{ inputs.checkout-submodules }}
 
       - name: Fetch the checker from the toolbox
         env:
@@ -53,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .coherence
-          for tool in check-native-coherence.py dump-exports.py; do
+          for tool in check-native-coherence.py dump-exports.py check-exports-fresh.py; do
             gh api "repos/EvergineTeam/Evergine.Bindings/contents/tools/$tool?ref=${{ inputs.toolbox-ref }}" \
               -H 'Accept: application/vnd.github.raw' > ".coherence/$tool"
           done
@@ -61,6 +75,13 @@ jobs:
           # dumpbin: those are not on every runner, and their prose has to be
           # scraped, which reported a DLL's own name as an exported symbol.
           python -m pip install --quiet pefile pyelftools macholib pyyaml
+
+      # Before the symbol check, because it is cheaper and because a stale copy makes
+      # the symbol check's answer meaningless: it would compare declarations generated
+      # from one revision against a library built from another.
+      - name: Check the exported definitions are fresh
+        shell: bash
+        run: python .coherence/check-exports-fresh.py "${{ inputs.manifest }}"
 
       - name: Check every declaration resolves
         shell: bash

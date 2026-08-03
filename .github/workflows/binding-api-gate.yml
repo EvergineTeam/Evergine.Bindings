@@ -90,6 +90,14 @@ on:
         required: false
         type: boolean
         default: false
+      coherence-submodules:
+        description: >-
+          Forwarded to the coherence check as its `checkout-submodules`. Needed when
+          the manifest declares `exports`, whose freshness can only be judged against
+          the submodule they were copied from.
+        required: false
+        type: string
+        default: 'false'
       agent-label:
         description: 'Only pull requests carrying this label are eligible to merge'
         required: false
@@ -307,6 +315,8 @@ jobs:
   coherence:
     if: inputs.native-coherence
     uses: EvergineTeam/Evergine.Bindings/.github/workflows/binding-native-coherence.yml@v1
+    with:
+      checkout-submodules: ${{ inputs.coherence-submodules }}
 
   merge:
     needs: [gate, coherence]

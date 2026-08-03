@@ -25,9 +25,26 @@ from pathlib import Path
 import yaml
 
 HERE = Path(__file__).parent
-# Written by the generator, matched literally: [DllImport("lib", EntryPoint = "sym"
+
+# The attribute, up to its closing parenthesis, plus everything until the opening
+# parenthesis of the declaration it decorates. Both halves are needed: when
+# EntryPoint is absent the symbol is the method's own name, which is how .NET
+# resolves it and how most of this fleet is generated.
+#
+# This used to require EntryPoint. ImGui.Net declares 612 imports in one file with
+# only 15 of them naming an EntryPoint, so the check reported success after looking
+# at 2% of the surface -- worse than no check, because it looked like one.
 DLLIMPORT = re.compile(
-    r'DllImport\(\s*"([^"]+)"[^)]*?EntryPoint\s*=\s*"([^"]+)"', re.DOTALL)
+    r'DllImport\s*\(\s*"([^"]+)"([^)]*)\)\s*\]([^;{}]*?);', re.DOTALL)
+ENTRYPOINT = re.compile(r'EntryPoint\s*=\s*"([^"]+)"')
+# Attribute blocks sitting between the DllImport and the name, or on parameters:
+# [return:MarshalAs(UnmanagedType.I1)] and [MarshalAs(...)] string arg. Stripped
+# first, because their own parenthesis comes before the parameter list and a naive
+# "identifier before the first (" reads them as the imported symbol -- 163 of
+# ImGui.Net's 612 imports resolved to "MarshalAs" before this.
+ATTRIBUTE = re.compile(r'\[[^\]]*\]')
+# First identifier that opens a parameter list: the method name.
+METHOD = re.compile(r'(\w+)\s*\(')
 
 
 def fail(message):
@@ -80,7 +97,19 @@ def main():
         if any(part in ("bin", "obj") for part in source.parts):
             continue
         text = source.read_text(encoding="utf-8-sig", errors="replace")
-        for library, symbol in DLLIMPORT.findall(text):
+        for library, attribute_args, declaration in DLLIMPORT.findall(text):
+            entry = ENTRYPOINT.search(attribute_args)
+            if entry:
+                symbol = entry.group(1)
+            else:
+                name = METHOD.search(ATTRIBUTE.sub(" ", declaration))
+                if not name:
+                    # A DllImport whose symbol cannot be determined is worse than one
+                    # that is wrong, because it would be silently dropped from the
+                    # comparison and the check would still pass.
+                    fail(f"{source}: cannot read the imported symbol from "
+                         f"'{declaration.strip()[-60:]}'")
+                symbol = name.group(1)
             declared.setdefault(library, set()).add(symbol)
 
     if not declared:
