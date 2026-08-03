@@ -77,14 +77,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Every installed workflow records where it came from. Any one of them
-          # answers the question, so read the first.
-          installed=$(grep -hm1 '^source:' .github/workflows/*.md 2>/dev/null \
-                      | sed 's/.*@//' || true)
-          if [ -z "$installed" ]; then
+          # Every installed workflow records where it came from, and `gh aw add`
+          # installs them together, so they agree. Collect the distinct values
+          # rather than trusting that: `grep -m1` counts per file, not overall, so
+          # reading two installed workflows produced two lines, and assigning that
+          # to a step output failed with "Invalid format" while the comparison
+          # against a single SHA could never match -- reporting a repository as
+          # outdated forever, including when it was current.
+          shas=$(grep -h '^source:' .github/workflows/*.md 2>/dev/null \
+                 | sed 's/.*@//' | sort -u || true)
+          if [ -z "$shas" ]; then
             echo "No agentic workflows installed; nothing to update."
             echo "outdated=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          if [ "$(printf '%s\n' "$shas" | wc -l)" -gt 1 ]; then
+            # A half-updated repository. Reinstalling brings them back in step,
+            # so say so and carry on rather than stopping.
+            echo "::warning::installed workflows disagree on their source:"
+            printf '  %s\n' $shas
+          fi
+          installed=$(printf '%s\n' "$shas" | head -n1)
           latest=$(gh api "repos/${{ inputs.toolbox }}/commits/${{ inputs.ref }}" --jq .sha)
           echo "installed: $installed"
           echo "latest:    $latest"
