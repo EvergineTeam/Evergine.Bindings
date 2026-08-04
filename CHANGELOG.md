@@ -4,6 +4,20 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.22.0] - 2026-08-04
+
+### Added
+
+- **`wrapper-submodule-bump`, so `cpp-wrapper-porter` can deliver a pull request.** gh-aw cannot push a submodule bump: its signed-commit path builds commits through the GitHub API, which has no way to write a gitlink, and it refuses the unsigned fallback whenever a submodule has moved. The porter's first real run did the whole job -- found the API break in JoltPhysics 5.6.0, repaired it, ran 259 tests green -- and could only report it as an issue. The work was right; the delivery was impossible. Now the agent records the release it is taking in `upstream.release.current` and restores the pointer before finishing, and this workflow reads that field on the pull request branch and moves the pointer to match. Judgement to the agent, mechanical movement to a workflow.
+
+### Changed
+
+- **`cpp-wrapper-porter` no longer tries to commit the submodule.** It checks the release out locally to build against, records the tag in the manifest, and restores the recorded gitlink before emitting. A patch containing a submodule change is not merged with a warning -- the whole pull request degrades into an issue and the work is stranded.
+
+### Note
+
+`wrapper-submodule-bump` requires a GitHub App rather than `GITHUB_TOKEN`, for a reason easy to miss: **a push made with `GITHUB_TOKEN` does not trigger workflows.** The submodule commit would land and the build would never re-run, leaving a pull request that looks unverified because nothing verified it.
+
 ## [1.21.1] - 2026-08-04
 
 ### Fixed

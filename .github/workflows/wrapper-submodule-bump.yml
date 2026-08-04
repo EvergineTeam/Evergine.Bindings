@@ -1,0 +1,153 @@
+name: Wrapper Submodule Bump (Reusable)
+
+description: >
+  Moves a submodule pointer to the release the manifest records, on an agent's pull request
+  branch, and pushes it there.
+
+  It exists because gh-aw cannot deliver a submodule bump. Its signed-commit path builds a
+  commit through the GitHub API, which has no way to write a gitlink entry, and it refuses the
+  unsigned push fallback whenever a submodule has moved:
+
+    pushSignedCommits: submodule change detected in JoltPhysics, refusing unsigned push fallback
+    Git push operation failed - creating fallback issue instead of pull request
+
+  So cpp-wrapper-porter's first real run did the whole job -- found the API break, repaired it,
+  ran 259 tests green -- and could only report it as an issue. The work was right; the delivery
+  was impossible.
+
+  The split follows from what each side can actually do. The agent decides which release to
+  take and repairs the C for it, and records the decision in the manifest as
+  `upstream.release.current`. This workflow performs the one operation the agent cannot: it
+  reads that field and moves the pointer to match. Judgement to the agent, mechanical movement
+  to a workflow, which is the same division the rest of this toolbox uses.
+
+  Needs a GitHub App rather than GITHUB_TOKEN, for a reason that is easy to miss: a push made
+  with GITHUB_TOKEN does not trigger workflows. The submodule commit would land and the build
+  would never re-run, leaving a pull request that looks unverified because nothing verified it.
+
+on:
+  workflow_call:
+    inputs:
+      manifest:
+        description: 'Path to the binding manifest'
+        required: false
+        type: string
+        default: 'binding.yml'
+      submodule-path:
+        description: >-
+          Path of the submodule to move, as it appears in .gitmodules. Declared rather than
+          discovered: a repository with several submodules must say which one tracks the
+          release, and guessing would move the wrong pointer silently.
+        required: true
+        type: string
+      app-client-id:
+        description: 'GitHub App client id. Required -- see the note on GITHUB_TOKEN above.'
+        required: true
+        type: string
+      runner-os:
+        description: 'GitHub runner OS'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+    secrets:
+      APP_PRIVATE_KEY:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  bump:
+    runs-on: ${{ inputs.runner-os }}
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ inputs.app-client-id }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      # The pull request's head branch, not the merge commit: this pushes back to that branch.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ steps.app.outputs.token }}
+          fetch-depth: 0
+
+      - name: Move the submodule to the recorded release
+        id: bump
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          MANIFEST: ${{ inputs.manifest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PY=$(command -v python3 || command -v python)
+          "$PY" -c "import yaml" 2>/dev/null || "$PY" -m pip install --quiet pyyaml
+
+          # Two plain -c invocations rather than a heredoc inside a command substitution
+          # inside a YAML block scalar. That nesting parses in three languages at once and
+          # each one has its own opinion about quoting; a simpler form is worth two processes.
+          field() {
+            "$PY" -c "import sys,yaml
+m=yaml.safe_load(open(sys.argv[1],encoding='utf-8'))
+print((((m.get('upstream') or {}).get('release')) or {}).get(sys.argv[2]) or '')" "$MANIFEST" "$1"
+          }
+          TAG=$(field current)
+          REPO=$(field repo)
+          if [ -z "$TAG" ] || [ -z "$REPO" ]; then
+            echo "::error::$MANIFEST needs upstream.release.current and upstream.release.repo"
+            exit 1
+          fi
+          echo "manifest records $REPO $TAG"
+
+          SUB='${{ inputs.submodule-path }}'
+          WANT=$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq '.object.sha')
+          HAVE=$(git ls-tree HEAD "$SUB" | awk '{print $3}')
+          echo "recorded pointer $HAVE, tag resolves to $WANT"
+
+          if [ "$HAVE" = "$WANT" ]; then
+            echo "Pointer already at $TAG; nothing to do."
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # update-index rather than a checkout inside the submodule. Writing the gitlink
+          # directly needs neither the submodule's objects nor a clone of it, and it cannot
+          # accidentally commit a dirty working tree from inside it.
+          git update-index --cacheinfo 160000,"$WANT","$SUB"
+
+          # Verify what was written rather than trusting update-index, because a wrong pointer
+          # here produces a build failure that looks like an API break.
+          GOT=$(git ls-files -s "$SUB" | awk '{print $2}')
+          if [ "$GOT" != "$WANT" ]; then
+            echo "::error::wrote $GOT, expected $WANT"
+            exit 1
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "chore: move ${SUB} to ${TAG}
+
+          The agent that opened this pull request recorded ${TAG} in the manifest and repaired
+          the wrapper for it, but could not move the pointer itself: gh-aw's signed-commit path
+          cannot write a gitlink and it refuses the unsigned fallback when a submodule moves.
+
+          Pointer set to ${WANT}, which is what ${REPO} ${TAG} resolves to."
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          echo "moved=true" >> "$GITHUB_OUTPUT"
+
+      - name: Say what happened
+        shell: bash
+        run: |
+          {
+            echo "### Submodule pointer"
+            echo
+            if [ "${{ steps.bump.outputs.moved }}" = "true" ]; then
+              echo "Moved \`${{ inputs.submodule-path }}\` to the release the manifest records, and"
+              echo "pushed it to this branch. The build re-runs on that push, so the checks on this"
+              echo "pull request now cover the complete change rather than the agent's half of it."
+            else
+              echo "Already at the recorded release. Nothing to do."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
