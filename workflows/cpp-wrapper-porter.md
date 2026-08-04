@@ -110,12 +110,31 @@ produces code that looks native and is not.
 Resolve the release the manifest tracks. If it matches `release.current`, say `noop` and
 stop. Do not fetch, do not build.
 
-### 2. Move the pointer and compile
+### 2. Check the release out locally and compile
 
-Apply the bump the way the profile says. For most repositories that is one submodule
-pointer; for some it is a pointer plus a dependency baseline plus an explicit list of
-upstream libraries to link, and getting only the first one done produces a confusing
-failure rather than a clean one.
+Move the submodule **in your working tree** so you can build against the new release, but
+**do not leave that pointer in what you hand back.** Two separate things:
+
+- **Record the decision** by setting `upstream.release.current` in `binding.yml` to the tag
+  you are taking. That is the durable statement of which release this pull request is for.
+- **Restore the pointer before you finish.** `git submodule update --init --force <path>`
+  puts the recorded gitlink back, so your patch contains the C repair, the manifest and the
+  version macro, and no submodule change.
+
+This is not tidiness. You cannot deliver a submodule bump: gh-aw's signed-commit path builds
+commits through the GitHub API, which has no way to write a gitlink, and it refuses the
+unsigned push fallback whenever a submodule has moved. A patch containing one is not merged
+with a warning -- your entire pull request degrades into an issue, and the work is stranded.
+That happened on the first real run of this agent.
+
+A companion workflow, `wrapper-submodule-bump`, reads `release.current` off your branch and
+moves the pointer to match, then pushes it there. So the pull request ends up complete, and
+the build that runs on that push covers the whole change. Your job is to be right about which
+release and about the repair; the pointer is somebody else's mechanical step.
+
+For repositories where the bump is more than a pointer -- a dependency baseline, an explicit
+list of upstream libraries to link -- the profile says so, and those *are* ordinary file
+changes you should include.
 
 Then build.
 
