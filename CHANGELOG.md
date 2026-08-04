@@ -4,6 +4,17 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.21.0] - 2026-08-04
+
+### Fixed
+
+- **`toolbox-updater` no longer deletes a repository's own `.github/agents/`.** It removed the whole directory to clear the authoring scaffolding `gh aw add` regenerates, which would have taken JoltPhysicsC's `cpp-to-c-binding.agent.md` with it — twelve kilobytes of conventions the repository owns, in a directory the installer also writes to. It had never mattered because no repository had put anything of its own there; it would have gone quietly the first week one did. Now it deletes the installer's file by name and removes the directory only if that leaves it empty.
+- **`binding-updater` stops silently where there is no `generator` block.** Same rule as `cpp-wrapper-porter`: an agent installed as a package arrives everywhere, and reporting on a repository it cannot act on is noise once per repository per month.
+
+### Note
+
+The rule this settles is worth stating: **an agent shipped in the package must be inert where it does not apply.** `ci-doctor` had that property by accident, through a trigger naming specific workflows. Both others now have it deliberately.
+
 ## [1.20.1] - 2026-08-04
 
 ### Fixed
