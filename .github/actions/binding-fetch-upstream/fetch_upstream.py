@@ -27,6 +27,10 @@ TOKEN = os.environ.get("GH_TOKEN", "")
 # The caller needs the answer before it can decide whether to spend a
 # multi-platform native build on it.
 RESOLVE_ONLY = os.environ.get("RESOLVE_ONLY", "").lower() == "true"
+# Fetch at the release the manifest records rather than the newest one. Turns this into a
+# drift check: what changes is then a difference between the tree and its own declared
+# revision, not upstream having moved on.
+PIN_RECORDED = os.environ.get("AT_RECORDED_RELEASE", "").lower() == "true"
 
 
 def fail(message):
@@ -101,6 +105,21 @@ def resolve_release(upstream):
 
     track = rel.get("track", "pinned")
     current = rel.get("current")
+
+    # Answer "is the tree in step with the release it says it is on?" rather than "has a
+    # newer release appeared?". Those are different questions and only the first belongs
+    # in CI: a newer release is news, while a tree that does not match its own recorded
+    # release is a defect, and it is the defect that reaches consumers.
+    #
+    # JoltPhysics.NET had exactly that. Its vendored headers came from `main` while
+    # release.current read v5.5.0, whose tag held different content -- so CI regenerated
+    # from one thing, the CD fetched another, and the first CD after switching to release
+    # tracking committed generated code that did not compile. CI could not have caught it,
+    # because CI was reading the stale copy.
+    if PIN_RECORDED:
+        if not current:
+            fail("recorded-release mode needs release.current to be set")
+        return current, current, False
     repo = rel.get("repo") or next(
         (s["repo"] for s in upstream.get("sources", []) if s.get("repo")), None
     )

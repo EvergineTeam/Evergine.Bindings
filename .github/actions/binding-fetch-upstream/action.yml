@@ -26,6 +26,19 @@ inputs:
       spend a multi-platform build on it.
     required: false
     default: "false"
+  at-recorded-release:
+    description: >-
+      Fetch at the release `release.current` names instead of the newest one. Turns this
+      into a drift check: anything that differs is a difference between the tree and the
+      revision it declares, not upstream having moved on.
+
+      Those are separate questions and only this one belongs in CI. A newer release is
+      news; a tree that does not match its own recorded release is a defect, and it is the
+      defect that reaches consumers. JoltPhysics.NET vendored headers from `main` while
+      recording v5.5.0, so CI regenerated from one revision and the CD fetched another --
+      and the first CD after release tracking committed code that did not compile.
+    required: false
+    default: "false"
 
 outputs:
   changed:
@@ -77,6 +90,7 @@ runs:
         REPORT_PATH: ${{ inputs.report-path }}
         GH_TOKEN: ${{ inputs.github-token }}
         RESOLVE_ONLY: ${{ inputs.resolve-only }}
+        AT_RECORDED_RELEASE: ${{ inputs.at-recorded-release }}
       run: |
         set -euo pipefail
         # Windows runners ship `python`, not `python3`, and `pip` is not always on

@@ -1,0 +1,81 @@
+name: Binding Upstream Drift (Reusable)
+
+description: >
+  Checks that the vendored upstream sources match the revision the manifest says they came
+  from, and that regenerating from them reproduces the committed output.
+
+  It exists because CI and CD did not read the same thing. CI regenerates from the sources
+  vendored in the repository; the CD fetches them from the tracked release first. As long as
+  those agree the distinction is invisible, and the moment they diverge CI goes green over
+  one revision while the CD publishes another.
+
+  JoltPhysics.NET is the case that produced this. Its headers were vendored from `main`
+  while the manifest recorded release v5.5.0, whose tag held different content. Every pull
+  request passed. The first CD after release tracking was switched on fetched the tag,
+  regenerated, and committed C# that did not compile -- and no earlier check could have
+  seen it, because every earlier check was reading the stale copy.
+
+  Deliberately answers "does the tree match what it claims?" and not "has upstream moved?".
+  A newer release is news and belongs in a report; a tree that disagrees with its own
+  recorded revision is a defect, and it is the defect that reaches consumers. So this stays
+  green when a new release appears, and goes red when the repository is lying about itself.
+
+on:
+  workflow_call:
+    inputs:
+      manifest:
+        description: 'Path to the binding manifest'
+        required: false
+        type: string
+        default: 'binding.yml'
+      checkout-submodules:
+        description: 'Passed straight to actions/checkout'
+        required: false
+        type: string
+        default: 'false'
+      runner-os:
+        description: 'GitHub runner OS'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ${{ inputs.runner-os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: ${{ inputs.checkout-submodules }}
+
+      - name: Fetch the recorded release over the vendored sources
+        id: upstream
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-fetch-upstream@v1
+        with:
+          manifest: ${{ inputs.manifest }}
+          at-recorded-release: 'true'
+
+      # git rather than the action's own answer, because git is what the CD's change
+      # detection uses and because it names the files. `changed` says whether something
+      # differs; this says what.
+      - name: Report what differs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Vendored sources match the recorded release."
+            exit 0
+          fi
+
+          echo "::error::the vendored sources do not match the release the manifest records."
+          echo "Files that differ:"
+          git diff --cached --name-only | sed 's/^/  /'
+          echo
+          echo "Fetching the recorded release changed the tree, so what is committed here"
+          echo "is not what that release contains. CI regenerates from the committed copy"
+          echo "and the CD fetches this one, which is how the two can disagree while every"
+          echo "check passes. Run the CD, or refresh the sources by hand and commit them."
+          exit 1
