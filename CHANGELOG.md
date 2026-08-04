@@ -4,6 +4,143 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.18.0] - 2026-08-04
+
+### Added
+
+- **Native libraries can come from release assets.** `upstream.assets` downloads binaries attached to the release the sources came from and unpacks them, for a binding whose libraries are built in another repository. `natives-artifact-pattern` covers the case where the CD builds them in the same run; nothing covered this one. Cross-repo artifacts expire and record no version — all 42 that JoltPhysicsC had produced were already gone — and calling the other repository's build as a reusable workflow cannot follow a resolved tag, because `uses:` takes no expression. Defaulting the tag to the resolved release is what keeps headers and libraries on one revision by construction.
+- **A third agent, `cpp-wrapper-porter`,** registered in the manifest schema. For repositories with no generator, where a version bump becomes compile errors somebody has to resolve.
+
+### Changed
+
+- **The tracked CD's native backstop accepts either route.** It refuses to commit a source bump for a package shipping native binaries unless the binaries were handed over — correct, and what stopped ImGui.Net publishing 24 symbols exported by nothing — but it knew only artifacts, so it would have refused a release-asset binding for doing the right thing.
+- **The manifest requires only `toolbox` and `upstream`,** with `package` and `generator` required together. A repository that tracks an upstream but publishes no package can now carry a manifest and reuse release resolution instead of reimplementing it.
+
+### Fixed
+
+- **Archive member names are parsed as POSIX.** The first traversal guard used `Path(entry).is_absolute()`, which is `False` on Windows for `/etc/passwd` — no drive letter — and joining a rooted path discards the left side, so the entry landed outside the destination. Effective on Linux, useless on the runner the feature exists for.
+
+## [1.17.0] - 2026-08-03
+
+### Added
+
+- **`publish-only` on the tracked CD.** Packages and publishes the repository as it stands, without consulting upstream. `force-publish` still fetches first, so once upstream moves it ships the newer sources rather than the reviewed ones — the same input meaning two different things. Refuses to run if regeneration would change the tree, since that would publish something `main` does not contain.
+
+## [1.16.1] - 2026-08-03
+
+### Fixed
+
+- **The API surface dumper survives references it cannot resolve.** It aborted with SIGABRT on an unresolvable `Evergine.Mathematics`. Degrading alone would have given a green verdict with 11% of the surface opaque, which is worse than the crash, so the build also stops creating them via `CopyLocalLockFileAssemblies`.
+
+## [1.16.0] - 2026-08-03
+
+### Added
+
+- **`submodule_heads`, so a native build compiles the revision the run will commit.** The build was checking out the *recorded* pointers, which are the old ones when a bump is imminent. Artifacts arrived, every gate passed, and the package was equally broken — the dangerous shape, because nothing looked wrong.
+
+## [1.15.2] - 2026-08-03
+
+### Fixed
+
+- **`resolve-only` never inspected submodules.** It computed `ref_moved` from the release block alone, so a submodule manifest always reported nothing moved, the native build was skipped, and the CD committed a bump against old libraries.
+
+## [1.15.1] - 2026-08-03
+
+### Added
+
+- **`checkout-submodules` on the tracked CD.** Moving a submodule pointer means fetching inside it, and there is nothing to fetch in if it was never checked out.
+
+## [1.15.0] - 2026-08-03
+
+### Added
+
+- **An architecture check for every shipped library.** Reads PE, ELF, Mach-O and `ar` directly and compares the machine field against what the RID promises. ImGui.Net published an `osx-x64` dylib that was arm64. Unreadable counts as a failure, not a pass.
+
+## [1.14.0] - 2026-08-03
+
+### Added
+
+- **A freshness check for exported definitions,** byte-comparing each vendored copy against its submodule source.
+
+### Fixed
+
+- **The coherence check reads imports with no `EntryPoint`.** It required one, so for a binding that lets the method name be the symbol it validated 15 declarations out of 612 and reported green.
+
+## [1.13.0] - 2026-08-03
+
+### Added
+
+- **`bump: together` and `exports` for submodules.** All heads resolve before anything moves, so a set of submodules compiling into one binary never lands a combination upstream never built; `exports` copies generated definitions out of the submodule, which used to be a manual step nothing failed over.
+
+## [1.12.0] - 2026-08-03
+
+### Added
+
+- **The API gate's merge depends on native coherence.** Run as a separate workflow it would go red while the merge proceeded anyway.
+
+### Fixed
+
+- **The dashboard stopped reporting toolbox consumers as not using the toolbox.**
+
+## [1.11.3] - 2026-08-03
+
+### Fixed
+
+- **`toolbox-updater` reads one SHA, not one per installed workflow.** `grep -hm1` counts per file, so two installed workflows produced two lines and the comparison could never match — it would have reported every repository outdated forever.
+
+## [1.11.2] - 2026-08-03
+
+### Fixed
+
+- **The API gate clears the `api:breaking` label when the verdict turns additive.** It set the label and never removed it.
+
+## [1.11.1] - 2026-08-03
+
+### Added
+
+- **`exempt-symbols` on the API gate,** for the version constant upstream bumps every release. Meshoptimizer's `VERSION = 1000` becoming `1020` was reported as a removal, so every release looked breaking.
+
+## [1.11.0] - 2026-08-03
+
+### Added
+
+- **A coherence check that every P/Invoke resolves in the shipped native libraries.** P/Invoke binds late: a declaration naming a symbol the library does not export compiles, passes CI, publishes, and throws on the first call.
+
+## [1.10.0] - 2026-08-03
+
+### Added
+
+- **`natives-artifact-pattern` on the tracked CD,** unpacking binaries built earlier in the same run before the change is detected, so the libraries and the header they were built from land in one commit.
+- **A format-aware exported-symbol dumper,** replacing `nm`/`dumpbin` scraping that reported a library's own name as a symbol.
+
+## [1.9.0] - 2026-08-03
+
+### Added
+
+- **Release tracking.** `upstream.release.track` follows `stable`, `latest` or stays `pinned`, for bindings that must not chase a branch.
+
+### Fixed
+
+- **The `paths` output, advertised since 1.2.0 and never written.** Callers received an empty list and counted every fetched source as a generated change, publishing a package whenever upstream moved even when the API was identical.
+
+## [1.8.1] - 2026-08-02
+
+### Fixed
+
+- **The API gate clears the build output between the two sides,** which it was otherwise comparing against itself.
+
+## [1.8.0] - 2026-08-02
+
+### Added
+
+- **The API gate.** Measures what a pull request does to the public API surface and merges automatically when nothing anyone can notice changed. Enum and constant *values* are part of the measured surface, because a renumbering keeps compiling and sends the wrong number to the driver.
+
+## [1.7.1] - 2026-08-02
+
+### Fixed
+
+- **`ci-doctor` can open pull requests again.** `protected_files_policy: request_review` cannot be honoured on the signed-commit path, so the doctor degraded to an issue instead of proposing the fix.
+
 ## [1.7.0] - 2026-08-02
 
 ### Added
