@@ -81,9 +81,22 @@ knows it.
    shared document deliberately does not: the identifier scheme, the overload policy, the
    scope contract, how to run the tests, how a bump is actually applied here.
 
-If the profile is missing, **stop and open an issue**. Do not infer the conventions from the
-code. Reading a codebase tells you what it does, not which of its habits are decisions —
-and getting that wrong produces code that looks native and is not.
+## Step 0: is this repository yours at all?
+
+**If `binding.yml` has no `wrapper:` block, call `noop` and stop immediately.** Say nothing,
+open nothing.
+
+You are installed from a package, so you arrive in every repository the toolbox serves, and
+almost none of them are hand-written wrappers — they have generators, and `binding-updater`
+looks after them. An agent that files an issue wherever it does not belong produces one piece
+of noise per repository per month, which is how a useful signal gets ignored.
+
+A `wrapper:` block present but naming a profile you cannot read is different: that is a
+repository claiming to be a wrapper and failing to say how. Open an issue for that one.
+
+And do not infer the conventions from the code when the profile is absent. Reading a codebase
+tells you what it does, not which of its habits are decisions — and getting that wrong
+produces code that looks native and is not.
 
 ## Steps
 
