@@ -44,6 +44,22 @@
       }
     },
 
+    "wrapper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile"],
+      "description": "For a repository that is a hand-maintained C wrapper over a C++ library rather than a generated binding. Read by cpp-wrapper-porter.",
+      "properties": {
+        "profile": {
+          "type": "string",
+          "description": "Path to this repository's wrapper profile, which decides everything docs/cpp-wrapper-conventions.md deliberately leaves open: identifier scheme, overload policy, scope contract, how to apply a bump, how to run the tests. Required rather than inferred -- reading a codebase tells you what it does, not which of its habits are decisions, and guessing produces code that looks native and is not."
+        },
+        "version-macro": {
+          "type": "string",
+          "description": "Name of the macro stating the upstream version this wrapper targets, kept in step with release.current. Without one, a downstream binding can only answer 'which upstream is this?' by cloning two repositories and resolving a commit against a tag list."
+        }
+      }
+    },
     "upstream": {
       "type": "object",
       "required": ["kind", "language", "sources"],
