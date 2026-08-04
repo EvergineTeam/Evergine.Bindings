@@ -15,7 +15,17 @@ permissions:
   pull-requests: read
   copilot-requests: write
 strict: true
-model: claude-sonnet-5
+# Opus, where the other two agents use Sonnet. The difference is what a wrong answer looks
+# like. ci-doctor edits a workflow file and binding-updater runs a generator: when either
+# gets it wrong, the pipeline stays broken and somebody reads the log. Here the wrong answer
+# is C++ that compiles -- an argument in the wrong position, a member read that should have
+# been a method call -- and the cheapest way out of a compile error is always to make the
+# compiler stop complaining rather than to make the code correct.
+#
+# The tests catch a lot of that, and they are the reason auto-merge is off here. But eleven
+# suites over roughly 1,280 functions is partial coverage, so a semantically wrong repair in
+# an untested corner survives every gate. That is the case worth paying for.
+model: claude-opus-5
 max-turns: 80
 timeout-minutes: 60
 max-ai-credits: 900
