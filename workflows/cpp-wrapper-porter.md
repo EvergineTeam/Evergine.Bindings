@@ -25,7 +25,12 @@ strict: true
 # The tests catch a lot of that, and they are the reason auto-merge is off here. But eleven
 # suites over roughly 1,280 functions is partial coverage, so a semantically wrong repair in
 # an untested corner survives every gate. That is the case worth paying for.
-model: claude-opus-5
+# claude-opus-4.8, not opus-5: the AWF runtime rejects the latter outright --
+# "model 'claude-opus-5' is unsupported or unrecognized by this AWF version" -- while
+# accepting claude-sonnet-5, which is what the other two agents use. Worth knowing that
+# `gh aw compile --strict` passed it and the failure came at run time, so the model name is
+# not validated when the lock file is built.
+model: claude-opus-4.8
 max-turns: 80
 timeout-minutes: 60
 max-ai-credits: 900

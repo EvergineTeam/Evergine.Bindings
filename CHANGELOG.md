@@ -4,6 +4,12 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.21.1] - 2026-08-04
+
+### Fixed
+
+- **`cpp-wrapper-porter` asked for a model the runtime does not know.** `claude-opus-5` is rejected outright by this AWF version, which suggests `claude-opus-4.8` — while accepting `claude-sonnet-5`, which the other two agents use. The reasoning for an Opus-class model here is unchanged; only the identifier was wrong. Worth recording that `gh aw compile --strict` accepted the bad name and the failure came at run time, so a model name is not validated when the lock file is built.
+
 ## [1.21.0] - 2026-08-04
 
 ### Fixed
