@@ -57,6 +57,14 @@ outputs:
       ones, since the bump happens later, and the libraries then belong to the revision
       being replaced.
     value: ${{ steps.fetch.outputs.submodule_heads }}
+  natives_from_release:
+    description: >-
+      true when the manifest declared `upstream.assets` and they were unpacked in this
+      run. The tracked CD refuses to commit a source bump for a package that ships native
+      binaries unless somebody handed the binaries over; it knew only one way of doing
+      that, artifacts from the same run, and would otherwise block the case where they
+      come from a release of the repository the sources came from.
+    value: ${{ steps.fetch.outputs.natives_from_release }}
 
 runs:
   using: composite
