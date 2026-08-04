@@ -241,8 +241,16 @@ jobs:
       # definitions, regenerated bindings, old libraries, 24 declared symbols exported
       # by nothing. The caller's condition for building them was wrong; this is the
       # backstop that should have made the mistake loud instead of silent.
+      # Two ways to satisfy it, because there are two ways the binaries can legitimately
+      # arrive: built in this run and handed over as artifacts, or published as assets of
+      # the release the sources came from and unpacked by the fetch step. Only the first
+      # existed, so a binding whose libraries are built in another repository would have
+      # been refused for doing the right thing.
       - name: Refuse a source bump with no matching native rebuild
-        if: steps.upstream.outputs.changed == 'true' && inputs.natives-artifact-pattern == ''
+        if: >
+          steps.upstream.outputs.changed == 'true' &&
+          inputs.natives-artifact-pattern == '' &&
+          steps.upstream.outputs.natives_from_release != 'true'
         shell: bash
         run: |
           set -euo pipefail

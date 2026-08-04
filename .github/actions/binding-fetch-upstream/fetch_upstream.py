@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 
@@ -185,6 +185,83 @@ def fetch_git_tree(source, resolved_ref=None):
             )
         elif entry["type"] == "file":
             files[str(Path(dest) / rel)] = http_get(entry["download_url"])
+    return files
+
+
+def fetch_release_assets(assets, repo, tag):
+    """Unpack binaries published as assets of the release the sources came from.
+
+    A binding that ships native libraries needs them to match the headers it was
+    generated from. Where the libraries are built in the same repository, the CD builds
+    them in the same run and hands them over as artifacts -- that is what
+    `natives-artifact-pattern` is for. This is the other shape: the libraries are built
+    somewhere else, and the only durable link between a library and the revision it was
+    compiled from is the release it is attached to.
+
+    Artifacts cannot serve here. They expire -- every one of the 42 that
+    EvergineTeam/JoltPhysicsC had produced was already gone -- and they carry no version.
+    Calling the other repository's build as a reusable workflow cannot serve either:
+    `uses:` takes no expression, so the tag would have to be edited by hand on every bump,
+    which is the manual step this exists to remove.
+
+    Returns {path: bytes}, the same shape the other adapters return, so the caller decides
+    what has actually changed rather than this function guessing.
+    """
+    import fnmatch
+    import io
+    import zipfile
+
+    meta = json.loads(
+        http_get(f"https://api.github.com/repos/{repo}/releases/tags/{tag}")
+    )
+    published = {a["name"]: a for a in meta.get("assets", [])}
+
+    files = {}
+    for spec in assets:
+        pattern = spec.get("name") or fail("assets entry is missing `name`")
+        into = Path(spec.get("into", "."))
+
+        matched = [published[n] for n in sorted(published) if fnmatch.fnmatch(n, pattern)]
+        if not matched:
+            fail(
+                f"no asset on {repo} {tag} matches '{pattern}'. Published: "
+                + (", ".join(sorted(published)) or "none")
+            )
+
+        for asset in matched:
+            # The API url with this Accept returns the bytes; browser_download_url works
+            # for a public repository and not for a private one.
+            blob = http_get(asset["url"], accept="application/octet-stream")
+
+            if spec.get("unpack") == "zip":
+                with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+                    for entry in zf.namelist():
+                        if entry.endswith("/"):
+                            continue
+                        # An archive is upstream input, so its member names are untrusted:
+                        # an entry named ../../.github/workflows/ci.yml would otherwise be
+                        # written wherever it asked.
+                        #
+                        # Parsed as POSIX because that is what a zip member name is, and
+                        # because the host's flavour gets this wrong in a way that matters.
+                        # On Windows, Path("/etc/passwd").is_absolute() is False -- there is
+                        # no drive letter -- and joining a rooted path discards the left
+                        # side, so `into / rel` escaped the destination entirely. The guard
+                        # was effective on Linux and not on the runner this feature is for.
+                        rel = PurePosixPath(entry)
+                        if rel.is_absolute() or ".." in rel.parts:
+                            fail(f"asset {asset['name']} contains unsafe path '{entry}'")
+
+                        target = into.joinpath(*rel.parts)
+                        # Belt and braces: whatever the parsing decided, the file has to
+                        # land inside `into`.
+                        if not target.resolve().is_relative_to(into.resolve()):
+                            fail(f"asset {asset['name']} escapes {into} with '{entry}'")
+
+                        files[str(target)] = zf.read(entry)
+            else:
+                files[str(into / asset["name"])] = blob
+
     return files
 
 
@@ -387,6 +464,44 @@ def main():
                 f"{'unchanged' if same else '**updated**'}, {size:,} bytes\n"
             )
 
+    # Assets are orthogonal to `kind`: a binding can take its headers out of a repository
+    # tree and its libraries from a release of that same repository, which is exactly the
+    # case this was added for. So this runs after whichever adapter ran, not instead of one.
+    asset_roots = set()
+    for spec in upstream.get("assets", []):
+        repo = spec.get("repo") or (upstream.get("release") or {}).get("repo") or fail(
+            "assets need a repository: set assets[].repo or release.repo")
+        tag = spec.get("tag") or resolved_ref or fail(
+            "assets need a tag: set assets[].tag, or a release block to resolve one")
+
+        payload = fetch_release_assets([spec], repo, tag)
+
+        # Compared byte for byte against what is already committed, so republishing the
+        # same release -- or rebuilding it and getting identical output -- is correctly
+        # read as no change. Deciding this by "did we write a file" would make every run
+        # look like a bump and publish a package on each one.
+        moved = 0
+        for dest, content in sorted(payload.items()):
+            target = Path(dest)
+            if not target.exists() or target.read_bytes() != content:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+                moved += 1
+            # `root` is what the caller subtracts from its changed-file list. Reported as
+            # the first path segment under `into`, so one entry covers every library
+            # beneath it instead of ten.
+            rel = target.relative_to(Path(spec.get("into", ".")))
+            # as_posix, so the value does not depend on which runner unpacked it. The
+            # caller normalises separators anyway; not relying on that is cheaper than
+            # finding out it stopped.
+            asset_roots.add((Path(spec.get("into", ".")) / rel.parts[0]).as_posix())
+
+        changed = changed or moved > 0
+        lines.append(
+            f"- `{spec['name']}` from {repo} `{tag}`: {len(payload)} file(s), "
+            f"{'**' + str(moved) + ' updated**' if moved else 'all identical'}\n"
+        )
+
     lines.append(
         f"\n**Result: {'sources changed' if changed else 'nothing changed'}.**\n"
     )
@@ -426,7 +541,17 @@ def main():
             # that regenerated to identical code.
             for export in source.get("exports", []):
                 fh.write(f"{export['to']}\n")
+        # Same reasoning for release assets: they are fetched input, not generator output.
+        # Left out, a rebuilt native library would read as a changed API and publish a
+        # package whose managed surface is identical.
+        for root in sorted(asset_roots):
+            fh.write(f"{root}\n")
         fh.write("__EOF__\n")
+        # The tracked CD refuses to commit a source bump for a package that ships native
+        # binaries unless someone handed the binaries over. It knew one way of doing that
+        # -- artifacts from the same run -- so without this it would block the case where
+        # they arrive from a release instead.
+        fh.write(f"natives_from_release={'true' if asset_roots else 'false'}\n")
 
 
 if __name__ == "__main__":

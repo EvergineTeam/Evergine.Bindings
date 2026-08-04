@@ -4,8 +4,14 @@
   "title": "Evergine binding manifest",
   "description": "Declares where a binding's upstream specification lives, how it is generated and what it publishes. Read by both the deterministic reusable workflows and the agentic workflows.",
   "type": "object",
-  "required": ["toolbox", "package", "upstream", "generator"],
+  "required": ["toolbox", "upstream"],
   "additionalProperties": false,
+
+  "$comment": "package and generator are required together rather than always, so a repository that has an upstream to track but produces no NuGet package can carry a manifest. EvergineTeam/JoltPhysicsC is the case: it is the C wrapper JoltPhysics.NET binds to, has no C# generator of its own, and needs release resolution from this machinery rather than a second implementation of it.",
+  "dependentRequired": {
+    "package": ["generator"],
+    "generator": ["package"]
+  },
 
   "properties": {
     "toolbox": {
@@ -82,6 +88,37 @@
             "repo": {
               "type": "string",
               "description": "owner/name to read releases from. Defaults to the repo of the first source that declares one."
+            }
+          }
+        },
+        "assets": {
+          "type": "array",
+          "description": "Binaries published as assets of the release the sources come from, unpacked into this repository. Orthogonal to `kind`: a binding can take its headers out of a repository tree and its native libraries from a release of that same repository, which is the case this exists for. Use it when the libraries are built elsewhere -- natives-artifact-pattern on the CD covers the case where they are built in the same run. Two alternatives were rejected: artifacts expire and carry no version, and calling the other repository's build as a reusable workflow cannot follow a resolved tag, because `uses:` takes no expression. Destinations are reported as fetched sources, so a rebuilt library does not read as a changed API.",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Asset name, or a glob matching several. Fails when nothing matches, because a manifest asking for libraries that are not published means the package would ship without them."
+              },
+              "repo": {
+                "type": "string",
+                "description": "owner/name to read the release from. Defaults to release.repo."
+              },
+              "tag": {
+                "type": "string",
+                "description": "Release tag to read. Defaults to the tag release tracking resolved, which is what keeps the libraries and the headers on one revision."
+              },
+              "unpack": {
+                "enum": ["zip"],
+                "description": "Treat the asset as an archive and extract it. Omit to write the asset itself. Member names are validated: an entry escaping the destination is refused."
+              },
+              "into": {
+                "type": "string",
+                "description": "Directory the contents land in, relative to the repository root. An archive that already carries runtimes/<rid>/native/ needs only the package directory here, so unpacking is the whole mapping."
+              }
             }
           }
         },
@@ -166,7 +203,8 @@
       "additionalProperties": false,
       "properties": {
         "binding-updater": { "$ref": "#/$defs/agentOverride" },
-        "ci-doctor": { "$ref": "#/$defs/agentOverride" }
+        "ci-doctor": { "$ref": "#/$defs/agentOverride" },
+        "cpp-wrapper-porter": { "$ref": "#/$defs/agentOverride" }
       }
     }
   },
