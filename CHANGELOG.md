@@ -4,6 +4,19 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.19.0] - 2026-08-04
+
+### Added
+
+- **`binding-upstream-drift`, a CI check that the tree matches the release it claims.** CI and the CD were not reading the same thing: CI regenerates from the sources vendored in the repository, the CD fetches them from the tracked release first. While those agree the distinction is invisible; once they diverge, CI goes green over one revision while the CD publishes another. JoltPhysics.NET vendored headers from `main` while recording v5.5.0, every pull request passed, and the first CD after release tracking committed C# that did not compile.
+- **`at-recorded-release` on `binding-fetch-upstream`.** Fetches at `release.current` rather than the newest release, which is what turns a fetch into a drift check. Answering "does the tree match what it claims?" instead of "has upstream moved?" is deliberate: a newer release is news, a tree disagreeing with its own recorded revision is a defect, and only the second should fail a pull request.
+
+## [1.18.1] - 2026-08-04
+
+### Fixed
+
+- **Native coherence reads static archives, and stops calling a partial check complete.** It skipped every extension it did not recognise, silently, then reported success over the remainder — seven platforms of ten for JoltPhysics.NET, with the three `.a` archives passing unexamined while the summary read "all 7 shipped libraries". Those three are the worst to lose: they are static libraries because those platforms cannot load a shared one, so nothing else exercises them either. Symbols now come from the archive's own index, which is what makes WebAssembly work without decoding wasm objects. The check also compares the runtime identifiers it verified against the ones the package ships and fails naming any it missed.
+
 ## [1.18.0] - 2026-08-04
 
 ### Added
