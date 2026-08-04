@@ -4,6 +4,12 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.20.1] - 2026-08-04
+
+### Fixed
+
+- **`cpp-wrapper-porter` is inert where it does not belong.** Agents are installed as a package, so it arrives in every repository the toolbox serves — and almost none are hand-written wrappers. It now stops silently when the manifest has no `wrapper:` block, and opens an issue only when a repository claims to be a wrapper and then fails to say how. `ci-doctor` already had this property through its trigger naming specific workflows; this makes it a rule rather than an accident, because an agent that files an issue wherever it does not apply produces one piece of noise per repository per month, which is how a real signal gets ignored.
+
 ## [1.20.0] - 2026-08-04
 
 ### Added
