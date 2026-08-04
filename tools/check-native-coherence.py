@@ -121,8 +121,19 @@ def main():
 
     problems = 0
     checked = 0
+    # Which RIDs the package ships, against which ones actually got verified. The check
+    # used to skip any extension it did not recognise, silently, and then report success
+    # over however many were left: for JoltPhysics.NET that was seven of ten, with the
+    # three .a archives -- iOS, the simulator and WebAssembly -- passing unexamined while
+    # the summary read "all shipped libraries". A partial check reported as complete is
+    # worse than no check, because it retires the suspicion.
+    shipped_rids = {p.parent.name for p in runtimes.glob("*/native")}
+    verified_rids = set()
+    skipped = []
+
     for native in sorted(runtimes.glob("*/native/*")):
-        if native.suffix.lower() not in (".dll", ".so", ".dylib") and native.suffix:
+        if native.suffix.lower() not in (".dll", ".so", ".dylib", ".a") and native.suffix:
+            skipped.append(str(native))
             continue
         rid = native.parent.parent.name
         for name, symbols in declared.items():
@@ -139,11 +150,25 @@ def main():
                 if len(missing) > 20:
                     print(f"    ... and {len(missing) - 20} more")
             else:
+                verified_rids.add(rid)
                 print(f"  {rid}: all {len(symbols)} declared symbols present")
 
     if checked == 0:
         fail(f"none of the libraries under {runtimes} match the names the bindings "
              f"import ({', '.join(sorted(declared))})")
+
+    for path in skipped:
+        print(f"::warning::not a library this check can read, ignored: {path}")
+
+    # Every RID the package ships has to have been looked at. Naming the ones that were
+    # not is the whole point -- those are the platforms where a missing symbol reaches a
+    # consumer, and they were invisible precisely because nothing said they were skipped.
+    unverified = sorted(shipped_rids - verified_rids - {r for r in shipped_rids if problems})
+    if unverified and not problems:
+        fail(
+            f"{len(unverified)} shipped platform(s) were not verified: "
+            f"{', '.join(unverified)}. The package ships a library there and nothing "
+            f"read it, so a missing symbol would reach a consumer unannounced.")
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
@@ -151,7 +176,8 @@ def main():
             fh.write("### Native coherence\n\n")
             fh.write(
                 f"{'Every' if not problems else 'Not every'} declared P/Invoke resolves "
-                f"in {checked} shipped library file(s).\n")
+                f"in {checked} shipped library file(s), covering "
+                f"{len(verified_rids)} of {len(shipped_rids)} runtime identifier(s).\n")
 
     if problems:
         fail(f"{problems} platform(s) ship a library missing symbols the bindings "
