@@ -4,6 +4,22 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.23.0] - 2026-08-04
+
+### Added
+
+- **`kind: vendored`, for an upstream no machine can fetch.** The Vuforia Engine SDK is only downloadable after signing in to developer.vuforia.com and accepting the EULA, so its headers arrive by hand and live in the repository. Without this, such a repository is locked out of `binding-tracked-cd` -- the only CD here that commits regenerated output -- because every other kind either fetches or fails, and `publish-only` skips the fetch by also skipping the commit, which is the opposite of what is wanted. The adapter downloads nothing, writes nothing, checks that the declared sources are present, and reports whether the generated code has caught up. See `docs/adapters/vendored.md`.
+
+  `changed` stays `false` on every run, deliberately: nothing was brought in by the step, since the sources were committed by whoever dropped them there alongside any native binaries from the same archive. Reporting `true` would trip the tracked CD's refusal to commit a source bump with no matching native rebuild -- a refusal that has caught a real defect and simply does not apply here. The publish decision therefore rests on the generated delta, which is where it belongs.
+
+- **`upstream.version-probe`, so a vendored version is read rather than maintained.** There is no tag to resolve and no release API to ask, so the version is a fact about the committed files. The probe reads it out of them and writes it into `release.current`, which means refreshing the sources updates the manifest in the same commit and the two cannot drift. Several patterns are allowed because a version is not always written in one place -- Vuforia spells it as three separate `#define`s -- and each must match **exactly once**. Zero matches is an error rather than a fall back to the recorded value: the file changed shape, and a silent miss would report the stale version for as long as nobody looked.
+
+  It also makes resolve-only mode useful for these repositories. With `track: pinned` and nothing else, resolve-only echoed the manifest's own recorded value back and could never notice that the tree had moved past it.
+
+### Changed
+
+- **`binding-updater` no longer treats "nothing changed" as the whole answer for a vendored upstream.** The report says nothing changed on every run, by construction, so the existing absolute rule would have made the agent noop even when it had been woken by `agent:needs-regen` to repair a failed regeneration. Now what woke it decides: a schedule is a noop, because it cannot chase a bump it cannot download, while the label is its case and everything it needs is already in the working tree. It is also told not to propose a script that downloads the upstream, since that download is gated on a person accepting a licence.
+
 ## [1.22.0] - 2026-08-04
 
 ### Added

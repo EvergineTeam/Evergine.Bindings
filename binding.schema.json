@@ -66,8 +66,31 @@
       "additionalProperties": false,
       "properties": {
         "kind": {
-          "enum": ["http-file", "git-tree", "git-submodule"],
-          "description": "Adapter used to fetch the specification. See docs/adapters/."
+          "enum": ["http-file", "git-tree", "git-submodule", "vendored"],
+          "description": "Adapter used to fetch the specification. See docs/adapters/. vendored: nothing fetches it, because nothing can -- the sources sit in the repository because obtaining them needs a sign-in or a licence acceptance. Declare version-probe so the version is read out of the sources rather than maintained by hand."
+        },
+        "version-probe": {
+          "type": "object",
+          "required": ["file", "patterns"],
+          "additionalProperties": false,
+          "description": "For kind: vendored. Reads the upstream version out of a file already in the tree, because there is no tag or release API to ask. Each pattern must match exactly once; zero matches is an error rather than a silent fall back to the recorded value, since a silent miss would report the old version for as long as nobody looked.",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path to the vendored file that carries the version."
+            },
+            "patterns": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string" },
+              "description": "Regular expressions, each with one capture group and each matching exactly once. Several are allowed because a version is not always written in one place: Vuforia spells it as three separate #defines."
+            },
+            "join": {
+              "type": "string",
+              "default": ".",
+              "description": "String used to join the captures into a version."
+            }
+          }
         },
         "language": {
           "type": "string",

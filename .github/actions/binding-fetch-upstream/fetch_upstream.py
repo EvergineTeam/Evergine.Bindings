@@ -148,6 +148,46 @@ def resolve_release(upstream):
     return resolved, current, resolved != current
 
 
+def probe_version(upstream):
+    """Read the upstream version out of a file that is already in the working tree.
+
+    For a vendored upstream there is nothing to ask: no tag, no release API, no package
+    registry. The version is a fact about the files somebody committed, so the only
+    trustworthy place to read it is those files. That also means nobody has to maintain
+    the number by hand -- refreshing the sources updates the manifest in the same commit,
+    and the two cannot drift apart.
+
+    Several patterns rather than one, because a version is not always written in one
+    place: Vuforia spells it as three separate `#define`s.
+    """
+    probe = upstream.get("version-probe")
+    if not probe:
+        return None
+
+    path = Path(probe["file"])
+    if not path.exists():
+        fail(
+            f"version-probe file not found: {path}. It names a vendored file, so its "
+            "absence means the manifest and the tree disagree about the layout."
+        )
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    parts = []
+    for pattern in probe["patterns"]:
+        found = re.findall(pattern, text)
+        # Exactly one match, and anything else is an error rather than a best guess.
+        # Zero is the dangerous one: the file changed shape, and a silent miss would
+        # leave this reporting the old version for as long as nobody looked.
+        if len(found) != 1:
+            fail(
+                f"version-probe pattern {pattern!r} matched {len(found)} time(s) in "
+                f"{path}, expected exactly 1"
+            )
+        parts.append(found[0])
+
+    return probe.get("join", ".").join(parts)
+
+
 def record_release(resolved):
     """Write the resolved tag back into the manifest as the new `current`.
 
@@ -367,6 +407,18 @@ def main():
 
     submodule_heads = ""
     resolved_ref, previous_ref, ref_moved = resolve_release(upstream)
+
+    # A vendored upstream has no tag to resolve, so the version comes from the sources
+    # themselves and overrides whatever the release block said. This also makes
+    # resolve-only mode useful here: without it, a manifest with `track: pinned` would
+    # report its own recorded value back and never notice that the tree had moved past it.
+    if kind == "vendored":
+        probed = probe_version(upstream)
+        if probed:
+            previous_ref = (upstream.get("release") or {}).get("current")
+            resolved_ref = probed
+            ref_moved = probed != previous_ref
+
     if resolved_ref:
         track = upstream["release"].get("track", "pinned")
         lines.append(
@@ -416,7 +468,43 @@ def main():
             fh.write(f"submodule_heads={submodule_heads}\n")
         return
 
-    if kind == "git-submodule":
+    if kind == "vendored":
+        # Fetches nothing and writes nothing, and that is the whole point: some upstreams
+        # cannot be downloaded by a machine. Vuforia's SDK is behind a sign-in and a licence
+        # acceptance, so the headers arrive by hand and live in the repository. This adapter
+        # exists so such a repository can still use the manifest-driven CD -- which is the
+        # only one that commits regenerated output -- instead of being locked out of it.
+        #
+        # `changed` stays false deliberately. Nothing was brought in by this step; the
+        # sources were already committed by whoever dropped them in. Reporting true would
+        # trip the tracked CD's refusal to commit a source bump with no matching native
+        # rebuild, and that refusal is right to exist -- it just does not apply when the
+        # human committed the sources and the binaries together in one go.
+        for source in upstream["sources"]:
+            path = Path(source["path"])
+            if not path.exists():
+                fail(
+                    f"vendored source not found: {path}. Nothing fetches this upstream, "
+                    "so the sources must be in the tree."
+                )
+            lines.append(
+                f"- `{source['path']}` ({source['format']}): vendored, "
+                f"{sum(1 for _ in path.rglob('*') if _.is_file()) if path.is_dir() else 1} "
+                "file(s) present\n"
+            )
+
+        if ref_moved:
+            lines.append(
+                f"\n**The vendored sources are at `{resolved_ref}` and the manifest recorded "
+                f"`{previous_ref or 'nothing'}`.** Somebody refreshed them; regenerate so the "
+                "generated code catches up.\n"
+            )
+        else:
+            lines.append(
+                f"\nVendored sources at `{resolved_ref or 'an unrecorded version'}`, matching "
+                "the manifest. There is nothing to fetch and nothing to bring up to date.\n"
+            )
+    elif kind == "git-submodule":
         bump = upstream.get("bump", "report-only")
         if bump not in ("report-only", "together"):
             fail(f"unknown upstream.bump '{bump}' (expected report-only or together)")
@@ -521,17 +609,35 @@ def main():
             f"{'**' + str(moved) + ' updated**' if moved else 'all identical'}\n"
         )
 
-    lines.append(
-        f"\n**Result: {'sources changed' if changed else 'nothing changed'}.**\n"
-    )
-    if not changed:
+    # Worded per kind. `changed` means "this step brought something in", which for a
+    # vendored upstream is false even when the sources have just been replaced -- so
+    # printing "nothing changed" straight after "somebody refreshed them, regenerate"
+    # reads as a contradiction to whoever, or whatever, is acting on this report.
+    if kind == "vendored":
+        result = "vendored sources refreshed" if ref_moved else "vendored sources unchanged"
+    else:
+        result = "sources changed" if changed else "nothing changed"
+    lines.append(f"\n**Result: {result}.**\n")
+    # Not said for a vendored upstream, where `changed` is false by construction. "Call
+    # noop and stop" would be the wrong instruction twice over: when the sources have just
+    # been refreshed there is plenty to regenerate, and when they have not, an agent woken
+    # by `agent:needs-regen` was called in to repair a failure rather than to chase a bump.
+    if not changed and kind != "vendored":
         lines.append(
             "\nNo upstream movement. Call `noop` and stop -- there is nothing to regenerate.\n"
         )
+    elif kind == "vendored" and not ref_moved:
+        lines.append(
+            "\nNothing to fetch. If you were woken to chase an upstream bump, `noop` and "
+            "stop; if you were woken to repair a failure, the sources you need are already "
+            "here.\n"
+        )
 
     # Record the release only once the fetch has succeeded, so a manifest never
-    # claims a version whose sources failed to land.
-    if changed and ref_moved and resolved_ref:
+    # claims a version whose sources failed to land. A vendored upstream satisfies that
+    # by definition -- the sources were committed before this step ran -- so the version
+    # read out of them is recorded even though nothing was fetched.
+    if ref_moved and resolved_ref and (changed or kind == "vendored"):
         record_release(resolved_ref)
         lines.append(f"\nManifest updated: `release.current` is now `{resolved_ref}`.\n")
 
