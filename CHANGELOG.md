@@ -4,6 +4,13 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.20.0] - 2026-08-04
+
+### Added
+
+- **`cpp-wrapper-porter`, a third agent, for the two repositories with no generator.** `JoltPhysicsC` and `CesiumC` are hand-written C wrappers over C++ libraries; when upstream cuts a release somebody reads what changed and edits C. The mandate is deliberately narrower than "update the wrapper": repair what the release broke, and report what it added as a proposal. It does not diff upstream's headers — between Jolt 5.5.0 and 5.6.0 that is 155 headers and four thousand lines of mostly internal change — it moves the pointer and compiles, so the errors are exactly the subset that touches the wrapper. Runs on Opus, because a mistake here is C++ that compiles.
+- **`docs/cpp-wrapper-conventions.md`,** the shared half of how these wrappers are written, and `wrapper.profile` in the manifest for the half that varies: identifier scheme, overload policy, scope contract, bump recipe, test invocation. Extracted from `JoltPhysicsC/.github/agents/cpp-to-c-binding.agent.md`, which had been written from CesiumC and lived in the other repository. Splitting it removed a hazard: several of its rules contradict CesiumC's actual code, so an agent enforcing them literally would have rewritten unrelated files during a version bump. The shared document now states that it describes rather than mandates.
+
 ## [1.19.0] - 2026-08-04
 
 ### Added
