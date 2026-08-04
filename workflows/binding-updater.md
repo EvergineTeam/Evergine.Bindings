@@ -85,6 +85,8 @@ If you were triggered by a label that is not `agent:needs-regen`, call `noop` im
 
 Do not infer paths from the directory layout. Do not hardcode a URL you saw in a workflow file. If `binding.yml` is missing or does not validate, stop and open an issue saying so — everything below depends on it.
 
+**If the manifest has no `generator` block, call `noop` and stop immediately.** Say nothing, open nothing. You regenerate a binding from a specification, and a repository with no generator has nothing for you to run — it is a hand-maintained C wrapper, and `cpp-wrapper-porter` looks after it. Agents install as a package, so you arrive everywhere the toolbox is consumed, and reporting on a repository you cannot act on produces one piece of noise per repository per month.
+
 Manifests carry a `NOTE` comment where the repository has a hazard: a pinned ref that must not move, native binaries that must be rebuilt alongside a header, an upstream we maintain ourselves. **Read those notes and obey them.** They exist because someone already thought about this repository and reached a conclusion you are not being asked to revisit.
 
 ## Step 2 — read the upstream report

@@ -116,11 +116,22 @@ jobs:
         run: |
           set -euo pipefail
           gh aw add "${{ inputs.toolbox }}@${{ inputs.ref }}" --force
-          # `gh aw add` regenerates the authoring scaffolding that binding
-          # repositories deliberately do not carry: workflows are written in the
-          # toolbox and only consumed here.
-          rm -rf .vscode .github/agents .github/skills .github/mcp.json \
+
+          # `gh aw add` regenerates the authoring scaffolding that binding repositories
+          # deliberately do not carry: workflows are written in the toolbox and only
+          # consumed here. Remove it again.
+          #
+          # Named files, not `rm -rf .github/agents`. That blanket delete would have taken
+          # JoltPhysicsC's own cpp-to-c-binding.agent.md with it -- twelve kilobytes of
+          # conventions the repository owns, sitting in a directory the installer also
+          # writes to. It had never mattered because no repository had put anything of its
+          # own there yet, and it would have gone quietly the first week one did.
+          rm -rf .vscode .github/skills .github/mcp.json \
                  .github/workflows/copilot-setup-steps.yml .github/aw/logs
+          rm -f .github/agents/agentic-workflows.md
+          # Only if the installer's file was the only thing in it.
+          rmdir .github/agents 2>/dev/null || true
+
           gh aw compile --strict
 
       - name: Open a pull request
