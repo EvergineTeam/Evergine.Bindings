@@ -5,3 +5,4 @@ emoji: 🧩
 includes:
   - workflows/ci-doctor.md
   - workflows/binding-updater.md
+  - workflows/cpp-wrapper-porter.md
