@@ -23,6 +23,8 @@ from pathlib import Path
 
 import yaml
 
+from native_paths import shipped_natives
+
 # What each RID promises. Names are normalised, so "x86_64" and "amd64" agree.
 EXPECTED = {
     "win-x64": "x86_64", "win-x86": "i386", "win-arm64": "arm64",
@@ -59,6 +61,30 @@ def elf_arch(data):
 
 def macho_arch(data):
     magic = struct.unpack_from(">I", data, 0)[0]
+
+    # A universal binary is a table of thin ones, and the field at offset 4 is the count of
+    # architectures rather than a cputype. Read as a cputype it means nothing, MACHO_CPU
+    # returns None, and the caller reports the file as unreadable and fails -- so a fat
+    # binary looked like a corrupt one. Apple ships these routinely, and while every Apple
+    # payload in this fleet happens to be thin today, that is luck rather than a property.
+    #
+    # A fat file is accepted when its members agree on an architecture, which is what a
+    # single-slice fat wrapper is; when they genuinely differ the RID cannot describe it and
+    # saying so is the honest answer.
+    if magic in (0xCAFEBABE, 0xBEBAFECA, 0xCAFEBABF):
+        wide = magic == 0xCAFEBABF
+        fmt = ">I" if magic in (0xCAFEBABE, 0xCAFEBABF) else "<I"
+        count = struct.unpack_from(fmt, data, 4)[0]
+        stride = 32 if wide else 20
+        found = set()
+        for index in range(count):
+            entry = 8 + index * stride
+            if entry + 8 > len(data):
+                return None
+            found.add(MACHO_CPU.get(struct.unpack_from(fmt, data, entry)[0]))
+        found.discard(None)
+        return found.pop() if len(found) == 1 else None
+
     fmt = "<I" if magic in (0xCEFAEDFE, 0xCFFAEDFE) else ">I"
     return MACHO_CPU.get(struct.unpack_from(fmt, data, 4)[0])
 
@@ -130,15 +156,22 @@ def main():
     project = manifest.get("package", {}).get("project")
     if not project:
         fail("manifest has no package.project")
-    runtimes = Path(project).parent / "runtimes"
+    project_dir = Path(project).parent
 
-    if not runtimes.is_dir():
-        print(f"{runtimes} does not exist; this package ships no native binaries.")
+    # Shared with check-native-coherence.py, so both look in the same places and resolve an
+    # Apple framework the same way. Previously this globbed runtimes/*/native/* itself and
+    # handed whatever it found to read_bytes(), which raises IsADirectoryError on a
+    # .framework -- a crash with no diagnostic, rather than a report.
+    natives, path_problems = shipped_natives(manifest, project_dir)
+    if not natives and not path_problems:
+        print(f"{project_dir} ships no native binaries.")
         return 0
 
+    for rid, reason in path_problems:
+        print(f"::warning::{rid}: {reason}")
+
     wrong, checked, unknown = [], 0, []
-    for native in sorted(runtimes.glob("*/native/*")):
-        rid = native.parent.parent.name
+    for rid, native in natives:
         expected = EXPECTED.get(rid)
         if expected is None:
             unknown.append(rid)
@@ -174,7 +207,7 @@ def main():
              f"present to a symbol check.")
 
     if checked == 0:
-        fail(f"no recognised RIDs under {runtimes}; nothing was verified")
+        fail(f"no recognised RIDs among the natives under {project_dir}; nothing was verified")
 
     print(f"\nAll {checked} shipped librar(y/ies) match the architecture their RID promises.")
     return 0

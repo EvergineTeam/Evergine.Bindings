@@ -40,6 +40,25 @@
         "runtime-identifier": {
           "type": "string",
           "description": "RID passed to the build, e.g. win-x64. Empty means portable."
+        },
+        "natives": {
+          "type": "array",
+          "description": "Native libraries this package publishes that do not sit under runtimes/<rid>/native/. Almost no package needs this: the convention carries the RID in the path, and the checks read it from there. Declare an entry when the payload cannot follow it -- an Apple .framework staged under buildTransitive for consumers has no RID in its path and is a directory rather than a file, so it would go unchecked, and a package half-checked reports as a package checked.",
+          "items": {
+            "type": "object",
+            "required": ["path", "rid"],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Path to the library, relative to the repository root. May be a .framework bundle, in which case the binary inside it is read."
+              },
+              "rid": {
+                "type": "string",
+                "description": "Runtime identifier this library is for, e.g. ios-arm64. Stated because it is not in the path; the architecture check holds the binary to what this promises."
+              }
+            }
+          }
         }
       }
     },

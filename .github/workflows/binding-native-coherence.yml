@@ -67,8 +67,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .coherence
+          # native_paths.py is imported by the two checkers rather than run: it decides
+          # where the libraries are and resolves an Apple framework to the binary inside
+          # it. One module rather than a copy in each, because that logic is exactly the
+          # kind that gets fixed in one place and left broken in the other.
           for tool in check-native-coherence.py dump-exports.py check-exports-fresh.py \
-                      check-native-arch.py; do
+                      check-native-arch.py native_paths.py; do
             gh api "repos/EvergineTeam/Evergine.Bindings/contents/tools/$tool?ref=${{ inputs.toolbox-ref }}" \
               -H 'Accept: application/vnd.github.raw' > ".coherence/$tool"
           done
