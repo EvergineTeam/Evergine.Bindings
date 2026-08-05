@@ -85,13 +85,15 @@ jobs:
           PY=$(command -v python3 || command -v python)
           "$PY" -c "import yaml" 2>/dev/null || "$PY" -m pip install --quiet pyyaml
 
-          # Two plain -c invocations rather than a heredoc inside a command substitution
-          # inside a YAML block scalar. That nesting parses in three languages at once and
-          # each one has its own opinion about quoting; a simpler form is worth two processes.
+          # One line, and that is the whole point rather than a style choice. This was written
+          # as a multi-line `python -c`, whose continuation lines sat at column 0 -- which ends
+          # a YAML block scalar. The file stopped being YAML at all, so GitHub could not parse
+          # it and attributed a failed empty run to every push to main: ten of them before
+          # anybody looked, and the pointer bump this workflow exists to perform could never
+          # have run. The comment that used to be here congratulated itself on avoiding a
+          # nesting trap while sitting inside a different one.
           field() {
-            "$PY" -c "import sys,yaml
-m=yaml.safe_load(open(sys.argv[1],encoding='utf-8'))
-print((((m.get('upstream') or {}).get('release')) or {}).get(sys.argv[2]) or '')" "$MANIFEST" "$1"
+            "$PY" -c "import sys,yaml; m=yaml.safe_load(open(sys.argv[1],encoding='utf-8')); print(((m.get('upstream') or {}).get('release') or {}).get(sys.argv[2]) or '')" "$MANIFEST" "$1"
           }
           TAG=$(field current)
           REPO=$(field repo)

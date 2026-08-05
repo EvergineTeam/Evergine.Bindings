@@ -4,6 +4,14 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.24.1] - 2026-08-05
+
+### Fixed
+
+- **`wrapper-submodule-bump.yml` was not valid YAML, and had never been.** Its `field()` helper was written as a multi-line `python -c` whose continuation lines sat at column 0 -- which ends a YAML block scalar. The file stopped parsing as a workflow, so GitHub attributed a failed empty run to every push to `main`: ten of them before anybody noticed the notifications. It also means the pointer bump this workflow exists to perform could never have run, so `cpp-wrapper-porter`'s pull-request delivery path was broken rather than merely untested. Collapsed to one line. The comment that used to sit above it congratulated itself on avoiding a nesting trap while sitting inside a different one.
+
+  Only this workflow was affected: the other ten parse, and the top-level `description` key nine of them carry is tolerated rather than invalid -- they have zero runs of their own because `workflow_call` workflows execute in the consumer's repository.
+
 ## [1.24.0] - 2026-08-05
 
 ### Added
