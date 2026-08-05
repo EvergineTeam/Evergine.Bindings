@@ -24,6 +24,8 @@ from pathlib import Path
 
 import yaml
 
+from native_paths import shipped_natives
+
 HERE = Path(__file__).parent
 
 # The attribute, up to its closing parenthesis, plus everything until the opening
@@ -34,8 +36,18 @@ HERE = Path(__file__).parent
 # This used to require EntryPoint. ImGui.Net declares 612 imports in one file with
 # only 15 of them naming an EntryPoint, so the check reported success after looking
 # at 2% of the surface -- worse than no check, because it looked like one.
+#
+# The library name is not always a literal. Vuforia.NET generates
+# `[DllImport(Native.Dll, ...)]`, where Native.Dll is a const chosen by the target -- the
+# library name on Android, "__Internal" on iOS, because there the library is linked
+# statically into the app. Requiring a quoted string meant all 495 of its declarations
+# matched nothing at all, and the check died claiming the bindings had not been generated.
+# Now the first argument may be a literal or an expression; when it is an expression the
+# library is unknown, and the symbol is required to resolve in *some* shipped library
+# rather than in a file whose name we cannot predict.
 DLLIMPORT = re.compile(
-    r'DllImport\s*\(\s*"([^"]+)"([^)]*)\)\s*\]([^;{}]*?);', re.DOTALL)
+    r'DllImport\s*\(\s*(?:"(?P<literal>[^"]+)"|(?P<expression>[A-Za-z_][\w.]*))'
+    r'(?P<args>[^)]*)\)\s*\](?P<declaration>[^;{}]*?);', re.DOTALL)
 ENTRYPOINT = re.compile(r'EntryPoint\s*=\s*"([^"]+)"')
 # Attribute blocks sitting between the DllImport and the name, or on parameters:
 # [return:MarshalAs(UnmanagedType.I1)] and [MarshalAs(...)] string arg. Stripped
@@ -62,15 +74,12 @@ def exported(library):
     return set(result.stdout.split())
 
 
-def library_matches(name, filename):
-    """Whether a shipped file is the library a DllImport names.
-
-    DllImport carries the bare name -- "meshoptimizer" -- and each platform
-    decorates it differently: meshoptimizer.dll, libmeshoptimizer.so,
-    libmeshoptimizer.dylib.
-    """
-    stem = Path(filename).stem
-    return stem == name or stem == f"lib{name}"
+# library_matches used to live here, pairing a DllImport name with the shipped file it
+# referred to -- "meshoptimizer" against meshoptimizer.dll and libmeshoptimizer.so. It is
+# gone because nothing pairs them any more: the comparison is against the union of every
+# shipped library, so which file a name refers to stopped being a question this has to
+# answer. It could not have answered it for Apple targets anyway, where the name is
+# "__Internal" and refers to the consuming application rather than to anything we ship.
 
 
 def main():
@@ -84,10 +93,9 @@ def main():
         fail("manifest has no package.project")
     project_dir = Path(project).parent
 
-    runtimes = project_dir / "runtimes"
-    if not runtimes.is_dir():
-        print(f"{runtimes} does not exist; this package ships no native binaries. "
-              f"Nothing to check.")
+    natives, path_problems = shipped_natives(manifest, project_dir)
+    if not natives and not path_problems:
+        print(f"{project_dir} ships no native binaries. Nothing to check.")
         return 0
 
     # Every source under the package, not only the generated folders: hand-written
@@ -97,7 +105,13 @@ def main():
         if any(part in ("bin", "obj") for part in source.parts):
             continue
         text = source.read_text(encoding="utf-8-sig", errors="replace")
-        for library, attribute_args, declaration in DLLIMPORT.findall(text):
+        for match in DLLIMPORT.finditer(text):
+            # None when the name came from an expression rather than a literal. Kept as a
+            # distinct key so the report still separates one library from another where it
+            # can, instead of pooling everything the moment one declaration is indirect.
+            library = match.group("literal")
+            attribute_args = match.group("args")
+            declaration = match.group("declaration")
             entry = ENTRYPOINT.search(attribute_args)
             if entry:
                 symbol = entry.group(1)
@@ -116,74 +130,98 @@ def main():
         fail(f"no DllImport declarations found under {project_dir} -- either the "
              f"bindings were not generated or this check is looking in the wrong place")
 
-    print(f"Declared: " + ", ".join(
-        f"{len(s)} symbol(s) from '{n}'" for n, s in sorted(declared.items())))
+    print("Declared: " + ", ".join(
+        f"{len(s)} symbol(s) from '{n or 'a library named by an expression'}'"
+        for n, s in sorted(declared.items(), key=lambda kv: kv[0] or "")))
 
+    # Read each library once, and remember which RID it belonged to. Read once because the
+    # dumper shells out and these files run to tens of megabytes; remembered per RID because
+    # "which platform is missing this symbol" is the only useful thing to say about a failure.
+    exports_by_rid = {}
+    # Built from what resolved *and* from what did not, which is the whole point. Taking it
+    # from the resolved entries alone would mean a platform whose only file cannot be read
+    # never enters the set, so the "was every platform read" check below could not miss it --
+    # it would not know the platform existed. That is the same shape as the fault this check
+    # was written for, reintroduced one level up.
+    shipped_rids = {rid for rid, _ in natives} | {rid for rid, _ in path_problems if rid != "?"}
+    for rid, path in natives:
+        symbols = exported(path)
+        exports_by_rid.setdefault(rid, set()).update(symbols)
+        print(f"  {rid}: {path.name} exports {len(symbols)} symbol(s)")
+
+    # Every platform the package ships has to have been read. This is the property that
+    # caught JoltPhysics.NET shipping ten libraries with three of them -- the iOS, simulator
+    # and WebAssembly archives -- passing unexamined while the summary read "all shipped
+    # libraries"; a partial check reported as complete is worse than no check, because it
+    # retires the suspicion. It is kept separate from the symbol comparison below on purpose:
+    # relaxing that comparison must not be able to take this guarantee with it.
+    unread = sorted(rid for rid in shipped_rids if not exports_by_rid.get(rid))
+    for rid, reason in path_problems:
+        print(f"::warning::{rid}: {reason}")
+    if unread:
+        fail(f"{len(unread)} shipped platform(s) could not be read: {', '.join(unread)}. "
+             f"The package ships a library there and nothing looked inside it, so a missing "
+             f"symbol would reach a consumer unannounced.")
+    declared_problems = [p for p in path_problems if p[1].startswith("declared ")]
+    if declared_problems:
+        fail(f"{len(declared_problems)} path(s) in package.natives do not resolve. Somebody "
+             f"wrote them down, so this is the manifest being wrong rather than something to "
+             f"skip.")
+
+    # A symbol has to resolve in at least one shipped library, not in every one.
+    #
+    # A package whose managed surface is the union of several platforms cannot satisfy
+    # "every symbol in every library" and should not be asked to. Vuforia.NET declares four
+    # ARKit functions and three ARCore ones; the iOS framework exports the first set and not
+    # the second, the Android library the other way round, and both are correct. Measured:
+    # 495 declarations, 3 absent from iOS, 4 absent from Android, none absent from both.
+    #
+    # What this gives up, stated rather than discovered later: a function that ought to exist
+    # on both platforms and only exists on one still passes. Catching that would mean
+    # teaching this check which platform each declaration belongs to -- reading the #if
+    # guards in the generated source and mapping target frameworks to RIDs -- which couples
+    # it to how one generator happens to emit guards.
+    everywhere = set().union(*exports_by_rid.values()) if exports_by_rid else set()
     problems = 0
-    checked = 0
-    # Which RIDs the package ships, against which ones actually got verified. The check
-    # used to skip any extension it did not recognise, silently, and then report success
-    # over however many were left: for JoltPhysics.NET that was seven of ten, with the
-    # three .a archives -- iOS, the simulator and WebAssembly -- passing unexamined while
-    # the summary read "all shipped libraries". A partial check reported as complete is
-    # worse than no check, because it retires the suspicion.
-    shipped_rids = {p.parent.name for p in runtimes.glob("*/native")}
-    verified_rids = set()
-    skipped = []
+    for name, symbols in sorted(declared.items(), key=lambda kv: kv[0] or ""):
+        missing = sorted(symbols - everywhere)
+        label = name or "the imports"
+        if missing:
+            problems += 1
+            print(f"::error::{len(missing)} symbol(s) declared by {label} are exported by "
+                  f"no shipped library")
+            for symbol in missing[:20]:
+                print(f"    {symbol}")
+            if len(missing) > 20:
+                print(f"    ... and {len(missing) - 20} more")
+        else:
+            print(f"  {label}: all {len(symbols)} declared symbols resolve somewhere")
 
-    for native in sorted(runtimes.glob("*/native/*")):
-        if native.suffix.lower() not in (".dll", ".so", ".dylib", ".a") and native.suffix:
-            skipped.append(str(native))
-            continue
-        rid = native.parent.parent.name
-        for name, symbols in declared.items():
-            if not library_matches(name, native.name):
-                continue
-            checked += 1
-            missing = sorted(symbols - exported(native))
-            if missing:
-                problems += 1
-                print(f"::error::{rid}: {len(missing)} declared symbol(s) not "
-                      f"exported by {native.name}")
-                for symbol in missing[:20]:
-                    print(f"    {symbol}")
-                if len(missing) > 20:
-                    print(f"    ... and {len(missing) - 20} more")
-            else:
-                verified_rids.add(rid)
-                print(f"  {rid}: all {len(symbols)} declared symbols present")
+    # Reported without failing: this is the per-platform detail the union deliberately
+    # tolerates, and it is worth seeing rather than hiding. A number that grows unexpectedly
+    # after an upstream refresh is the signal.
+    for rid in sorted(shipped_rids):
+        elsewhere = {s for symbols in declared.values() for s in symbols} - exports_by_rid[rid]
+        if elsewhere:
+            print(f"  {rid}: {len(elsewhere)} declared symbol(s) live on another platform")
 
-    if checked == 0:
-        fail(f"none of the libraries under {runtimes} match the names the bindings "
-             f"import ({', '.join(sorted(declared))})")
-
-    for path in skipped:
-        print(f"::warning::not a library this check can read, ignored: {path}")
-
-    # Every RID the package ships has to have been looked at. Naming the ones that were
-    # not is the whole point -- those are the platforms where a missing symbol reaches a
-    # consumer, and they were invisible precisely because nothing said they were skipped.
-    unverified = sorted(shipped_rids - verified_rids - {r for r in shipped_rids if problems})
-    if unverified and not problems:
-        fail(
-            f"{len(unverified)} shipped platform(s) were not verified: "
-            f"{', '.join(unverified)}. The package ships a library there and nothing "
-            f"read it, so a missing symbol would reach a consumer unannounced.")
+    total_declared = len({s for symbols in declared.values() for s in symbols})
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as fh:
             fh.write("### Native coherence\n\n")
             fh.write(
-                f"{'Every' if not problems else 'Not every'} declared P/Invoke resolves "
-                f"in {checked} shipped library file(s), covering "
-                f"{len(verified_rids)} of {len(shipped_rids)} runtime identifier(s).\n")
+                f"{'Every' if not problems else 'Not every'} one of {total_declared} declared "
+                f"P/Invoke(s) resolves in the {len(natives)} shipped library file(s), across "
+                f"{len(shipped_rids)} runtime identifier(s), all of them read.\n")
 
     if problems:
-        fail(f"{problems} platform(s) ship a library missing symbols the bindings "
-             f"declare. Calling them would throw EntryPointNotFoundException.")
+        fail(f"{problems} group(s) of declarations name symbols no shipped library exports. "
+             f"Calling them would throw EntryPointNotFoundException.")
 
-    print(f"\nAll declarations resolve on all {checked} shipped libraries.")
+    print(f"\nAll {total_declared} declarations resolve, across {len(shipped_rids)} "
+          f"platform(s): {', '.join(sorted(shipped_rids))}.")
     return 0
 
 

@@ -4,6 +4,24 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.24.0] - 2026-08-05
+
+### Added
+
+- **`native_paths.py`, and `package.natives` in the manifest, so an Apple framework can be checked.** Vuforia.NET ships two platforms and the coherence tools could see one: its iOS payload is a `.framework` staged under `buildTransitive/ios/` for consumers, which is outside `runtimes/` and is a directory rather than a file. The glob never reached it, the extension filter would have skipped it, and `check-native-arch.py` handed the directory to `read_bytes()`, which raises with no diagnostic. So that platform went unchecked and `native-coherence` had to stay off -- 495 P/Invokes with half the package unverified. Discovery now lives in one shared module used by both checkers, resolves a framework bundle to the binary inside it (flat iOS layout and versioned macOS layout), and takes extra paths from `package.natives` where the convention cannot carry the RID.
+
+### Changed
+
+- **The coherence check accepts a library named by an expression.** It required a quoted literal, and Vuforia.NET generates `[DllImport(Native.Dll, ...)]` -- a const that is the library name on Android and `"__Internal"` on iOS, where the library is linked into the app. All 495 declarations matched nothing and the check died claiming the bindings had not been generated. `library_matches` is gone with it: nothing pairs a name with a file any more, and it could never have done so for a name that refers to the consuming application.
+
+- **A declared symbol must resolve in at least one shipped library, not in every one.** A package whose managed surface is the union of several platforms cannot satisfy "every symbol everywhere" and should not be asked to: Vuforia declares four ARKit functions and three ARCore ones, and each library exports one set and not the other. Measured on the shipped binaries: 495 declarations, 3 absent from iOS, 4 absent from Android, none absent from both. The per-platform gaps are now reported without failing, because a count that grows unexpectedly after an upstream refresh is the signal.
+
+  What this gives up, stated rather than found out later: a function that ought to exist on both platforms and only exists on one now passes. Catching that would mean teaching the check which platform each declaration belongs to, which couples it to how one generator emits `#if` guards.
+
+  **The guarantee that every shipped platform was actually read is kept separate and intact.** It is the property that caught JoltPhysics.NET shipping ten libraries with three passing unexamined, and relaxing the symbol comparison must not be able to take it with it. It also now counts platforms whose files failed to resolve, which the first cut of this change did not -- a platform whose only file cannot be read has to be nameable, and building the set from resolved entries alone made it invisible.
+
+- **`macho_arch` handles universal binaries.** It read the field at offset 4 as a cputype; in a fat binary that is the count of architectures, so `MACHO_CPU` returned nothing and the file was reported unreadable -- a fat binary looked like a corrupt one. Every Apple payload in this fleet happens to be thin today, which is luck rather than a property.
+
 ## [1.23.0] - 2026-08-04
 
 ### Added
