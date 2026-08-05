@@ -39,6 +39,58 @@ def fail(message):
     sys.exit(1)
 
 
+# A plain version tag and nothing else: v1.2.3, 1.2.3, v1.2. Anything carrying a prerelease
+# or build suffix is deliberately not matched -- `track: tags` is the tag-only equivalent of
+# `stable`, and v1.2.0-rc1 is not stable. An upstream whose prereleases somebody actually
+# wants can get its own track when that day comes.
+VERSION_TAG = re.compile(r"^v?(\d+)\.(\d+)(?:\.(\d+))?$")
+
+
+def parse_version_tag(name):
+    """Return a comparable tuple for a version tag, or None if the name is not one."""
+    match = VERSION_TAG.match(name)
+    if not match:
+        return None
+    return tuple(int(part or 0) for part in match.groups())
+
+
+def newest_version_tag(repo):
+    """The highest version tag in `repo`, for upstreams that tag without cutting releases.
+
+    Sorted by parsed version rather than by the order the API hands back. GitHub documents
+    no order for the tags endpoint, so taking the first would make the answer depend on
+    something nobody controls, and it would change under us without any upstream change.
+    """
+    # Paginated rather than a single per_page=100. An upstream with more than a hundred tags
+    # is ordinary -- cesium-native is at sixty-odd and climbing -- and a single page would
+    # quietly start returning an answer computed from a subset.
+    max_pages = 10
+    names = []
+    for page in range(1, max_pages + 1):
+        batch = json.loads(
+            http_get(f"https://api.github.com/repos/{repo}/tags?per_page=100&page={page}")
+        )
+        names.extend(t["name"] for t in batch)
+        if len(batch) < 100:
+            break
+    else:
+        # Reached the cap with a full last page, so there may be more. Say so rather than
+        # answering from a subset as though it were the whole set.
+        print(
+            f"::warning::{repo} has more than {max_pages * 100} tags; "
+            "resolved from the first pages only"
+        )
+
+    versions = [(parse_version_tag(n), n) for n in names]
+    versions = [(v, n) for v, n in versions if v is not None]
+    if not versions:
+        fail(
+            f"{repo} has {len(names)} tag(s) and none of them is a plain version like "
+            "v1.2.3; 'tags' cannot be resolved"
+        )
+    return max(versions)[1]
+
+
 def normalise_eol(data):
     """Collapse CRLF and lone CR to LF, for comparison only.
 
@@ -142,8 +194,14 @@ def resolve_release(upstream):
         if not releases:
             fail(f"{repo} publishes no releases; 'latest' cannot be resolved")
         resolved = releases[0]["tag_name"]
+    elif track == "tags":
+        # For upstreams that tag and never cut a GitHub Release. cesium-native is one: sixty
+        # tags, zero releases, so `releases/latest` answers 404 and `stable` cannot be used
+        # here at all. The version ordering we do ourselves is the cost of that -- with
+        # `stable` the upstream author decides what counts as newest, and here we decide.
+        resolved = newest_version_tag(repo)
     else:
-        fail(f"unknown release.track '{track}' (expected stable, latest or pinned)")
+        fail(f"unknown release.track '{track}' (expected stable, latest, tags or pinned)")
 
     return resolved, current, resolved != current
 

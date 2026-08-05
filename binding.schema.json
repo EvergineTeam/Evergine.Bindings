@@ -136,8 +136,8 @@
           "description": "Follow tagged releases instead of a branch. A binding that ships native binaries needs this: the header and the libraries have to come from the same revision, and a branch is a moving target.",
           "properties": {
             "track": {
-              "enum": ["stable", "latest", "pinned"],
-              "description": "stable: the newest published non-prerelease release, as decided by the upstream author. latest: the newest release including prereleases. pinned: stay on `current` until a human moves it."
+              "enum": ["stable", "latest", "tags", "pinned"],
+              "description": "stable: the newest published non-prerelease release, as decided by the upstream author. latest: the newest release including prereleases. tags: the highest plain version tag, for upstreams that tag without ever cutting a GitHub Release -- prerelease suffixes are skipped, and the version ordering is ours rather than the author's, which is the cost of the upstream not stating it. pinned: stay on `current` until a human moves it."
             },
             "current": {
               "type": "string",

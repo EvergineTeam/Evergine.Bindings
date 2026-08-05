@@ -4,6 +4,18 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.25.0] - 2026-08-05
+
+### Added
+
+- **`release.track: tags`, for upstreams that tag and never cut a release.** `stable` reads `releases/latest` and `latest` reads `releases?per_page=1`; both answer 404 or empty for a repository that only tags. CesiumGS/cesium-native is one -- sixty-odd tags, **zero** published releases -- so neither existing track can follow it at all, and CesiumC had no way to answer "has upstream moved?" with the shared machinery.
+
+  Resolution is by parsed version rather than by the order the API returns, because GitHub documents no order for the tags endpoint: taking the first would make the answer depend on something nobody controls and change under us with no upstream change. Tags carrying a prerelease or build suffix are skipped, which makes this the tag-only equivalent of `stable` rather than of `latest`. Paginated to ten pages, and it warns rather than answering from a subset if an upstream ever exceeds that.
+
+  Verified against both kinds of repository: `CesiumGS/cesium-native` resolves to `v0.63.0`, and `jrouwe/JoltPhysics` resolves to `v5.6.0` -- the same answer its `track: stable` gives, so the two agree wherever both are usable.
+
+  The cost is worth naming: with `stable` the upstream author decides what counts as newest, and here we decide by parsing version strings. That is strictly worse information, and it is the only information a tag-only upstream offers.
+
 ## [1.24.1] - 2026-08-05
 
 ### Fixed
