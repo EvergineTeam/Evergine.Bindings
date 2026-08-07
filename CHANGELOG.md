@@ -4,6 +4,16 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.26.0] - 2026-08-07
+
+### Added
+
+- **The three CD workflows upload the packed `.nupkg` as a run artifact.** `publish-enabled: false` already existed and already skipped the push, but the packages it built were listed and then discarded, so the option could confirm that packing worked and nothing more. Installing a package to try it meant publishing it first, and nuget.org is not a staging area: a version pushed there cannot be withdrawn, only unlisted.
+
+  Uploaded on every run rather than only when publishing is off. When a publish does go out, the artifact is the only copy of exactly what was pushed, which is what you want in hand when a consumer reports something the sources do not explain.
+
+  Applied to `binding-tracked-cd`, `binding-simple-cd` and `binding-xml-cd`, which all had the same gap.
+
 ## [1.25.0] - 2026-08-05
 
 ### Added
