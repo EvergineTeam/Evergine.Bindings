@@ -4,6 +4,18 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.27.0] - 2026-08-08
+
+### Fixed
+
+- **`nuget-publish` now fails when the push fails, and checks the list it actually publishes.** Two defects, neither of which broke a run, both able to break one silently.
+
+  The nuget.org branch never checked `$LASTEXITCODE` while the Azure Artifacts branch checked it twice, so a failed push to nuget.org relied on the exit code propagating out of pwsh unaided. `$ErrorActionPreference = 'Stop'` does not cover that: it governs PowerShell cmdlet errors, not the exit codes of native executables. Publishing is the worst place to report success without having done anything.
+
+  And the guard validated a different file list from the one it guarded. It listed `*.nupkg` with the pattern hardcoded, then handed `Join-Path $packagesFolder $packagePattern` to NuGet, so it confirmed that packages existed and something else was uploaded. It happened to agree, because NuGet expands the glob it is given, but a guard built that way cannot catch the mismatch it exists for. Both now come from one resolution, and the push receives resolved paths rather than a pattern, so the log names exactly what went up.
+
+  `-Filter` is the Win32 FindFirstFile matcher and understands neither `**` nor path separators, so the default `**/*.nupkg` is normalised to a filter plus `-Recurse`, and a pattern that still contains a separator is rejected outright rather than silently matching nothing.
+
 ## [1.26.0] - 2026-08-07
 
 ### Added

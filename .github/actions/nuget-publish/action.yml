@@ -54,16 +54,36 @@ runs:
           exit 1
         }
 
-        $packages = Get-ChildItem -Path $packagesFolder -Filter *.nupkg -Recurse -File
-        if ($packages.Count -eq 0) {
-          Write-Error "No .nupkg files found under: $packagesFolder"
+        # One resolution, used for both the check and the push. It used to be two: this line
+        # listed *.nupkg with the pattern hardcoded, and the push below was handed
+        # Join-Path $packagesFolder $packagePattern instead -- so the guard confirmed that
+        # packages existed and then something else was uploaded. It happened to agree, because
+        # NuGet expands the glob it is given, but a guard that validates a different list from
+        # the one it guards cannot catch the mismatch it is there for.
+        # Callers pass "**/*.nupkg". -Filter is the Win32 FindFirstFile matcher: it understands
+        # * and ? inside a single name component and has no idea what ** or a path separator
+        # mean, so the globstar has to be stripped rather than passed through. -Recurse is what
+        # ** was asking for anyway.
+        $filter = $packagePattern -replace '^\*\*[\\/]', ''
+        if ($filter -match '[\\/]') {
+          Write-Error "package-pattern must be a file name pattern, optionally prefixed with '**/': got '$packagePattern'"
           exit 1
         }
 
+        $packages = @(Get-ChildItem -Path $packagesFolder -Filter $filter -Recurse -File)
+        if ($packages.Count -eq 0) {
+          Write-Error "No package matching '$packagePattern' found under: $packagesFolder"
+          exit 1
+        }
+
+        Write-Host "Publishing $($packages.Count) package(s) from ${packagesFolder}:"
+        $packages | ForEach-Object { Write-Host "  $($_.Name)  $($_.Length) bytes" }
+
         $isAzureArtifacts = $sourceUrl -match 'dev\.azure\.com|visualstudio\.com'
 
-        $pushPath = Join-Path $packagesFolder $packagePattern
-        $pushArgs = @("nuget", "push", $pushPath)
+        # The resolved paths, not a pattern. NuGet never has to guess what was meant, and the
+        # log names exactly what went up.
+        $pushArgs = @("nuget", "push") + ($packages | ForEach-Object { $_.FullName })
 
         if ($skipDuplicate) { $pushArgs += "--skip-duplicate" }
         if ($noSymbols)     { $pushArgs += "--no-symbols" }
@@ -97,4 +117,10 @@ runs:
         } else {
           $pushArgs += @("--source", $sourceUrl, "--api-key", $authToken)
           dotnet @pushArgs
+          # The Azure branch above has checked this since it was written and this one never did,
+          # so a failed push to nuget.org depended on the exit code propagating out of pwsh on
+          # its own. $ErrorActionPreference = 'Stop' does not cover it: that governs PowerShell
+          # cmdlet errors, not the exit codes of native executables. Publishing is the one step
+          # where reporting success without having done anything is worst.
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
