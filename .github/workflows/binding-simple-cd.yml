@@ -180,6 +180,15 @@ jobs:
         run: |
           ls ${{ inputs.output-folder }}/*.nupkg
 
+      # See binding-tracked-cd.yml: without this, publish-enabled false packs the packages and
+      # throws them away, so trying one before publishing means publishing it first.
+      - name: Upload the packages as a run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ${{ inputs.output-folder }}/*.nupkg
+          if-no-files-found: error
+
       - name: Publish NuGet
         if: ${{ success() && inputs.publish-enabled == true }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/nuget-publish@v1

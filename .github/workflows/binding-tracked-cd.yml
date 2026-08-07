@@ -377,6 +377,23 @@ jobs:
         run: |
           ls ${{ inputs.output-folder }}/*.nupkg
 
+      # Until now a run with publish-enabled false packed the packages, printed their names and
+      # threw them away, so "build it without publishing" could confirm that packing worked and
+      # nothing else. Anyone wanting to install the package and try it had to publish it first,
+      # which is the wrong order: nuget.org is not a staging area, and a version pushed there
+      # cannot be taken back.
+      #
+      # Uploaded on every run, not only when publishing is off. When a publish does go out, this
+      # is the only copy of exactly what was pushed, which is worth having when a consumer later
+      # reports something the sources do not explain.
+      - name: Upload the packages as a run artifact
+        if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ${{ inputs.output-folder }}/*.nupkg
+          if-no-files-found: error
+
       - name: Publish NuGet
         if: ${{ success() && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only) }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/nuget-publish@v1
