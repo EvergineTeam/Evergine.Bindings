@@ -1,0 +1,138 @@
+name: 'Notify Downstream Repositories'
+description: 'Tells the repositories declared in binding.yml that a release has been published, so they stop waiting for a clock.'
+author: 'Evergine Team'
+
+# A wrapper repository cuts a release; its binding repositories find out from a monthly cron
+# that runs the day *before* the wrapper's agent has done its work, so in practice a version
+# takes two months to reach a NuGet package instead of one. This closes that gap.
+#
+# Who consumes whom is read from binding.yml rather than written into a workflow, which is where
+# the rest of this fleet keeps that kind of fact:
+#
+#   downstream:
+#     - repo: EvergineTeam/Cesium.NET
+#
+# GITHUB_TOKEN cannot do this: it has no reach outside the repository it was minted for. The App
+# can, and needs no new secret -- APP_CLIENT_ID and APP_PRIVATE_KEY already exist at the
+# organisation with visibility "all". What differs from every other mint in this fleet is the
+# scoping: they all narrow the token to the repository doing the minting, either explicitly or
+# by omission, and this one names the destinations instead. Verified before this was written, by
+# minting a token from CesiumC scoped to Cesium.NET and having the dispatch accepted.
+
+inputs:
+  app-client-id:
+    description: 'Client id of the GitHub App allowed to dispatch into the downstream repositories'
+    required: true
+  app-private-key:
+    description: 'Private key of that App'
+    required: true
+  tag:
+    description: 'Release tag just published, passed through to the downstream event'
+    required: true
+  manifest:
+    description: 'Path to the manifest declaring the downstream repositories'
+    required: false
+    default: 'binding.yml'
+  event-type:
+    description: 'repository_dispatch event type the downstream workflows listen for'
+    required: false
+    default: 'upstream-released'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Read the downstream repositories from the manifest
+      id: read
+      shell: bash
+      env:
+        MANIFEST: ${{ inputs.manifest }}
+      run: |
+        set -euo pipefail
+        test -f "$MANIFEST" || { echo "::error::manifest not found: $MANIFEST"; exit 1; }
+
+        repos=$(python -c "
+        import yaml
+        m = yaml.safe_load(open('$MANIFEST', encoding='utf-8')) or {}
+        for entry in (m.get('downstream') or []):
+            repo = entry.get('repo') if isinstance(entry, dict) else entry
+            if repo:
+                print(repo.strip())
+        ")
+
+        # No downstream key is the normal case for most of the fleet, so it is not an error --
+        # but it is said out loud, because "nothing happened" and "nothing was meant to happen"
+        # look identical in a log otherwise.
+        if [ -z "$repos" ]; then
+          echo "no downstream declared in $MANIFEST, so there is nothing to notify"
+          echo "count=0" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Every destination must live in this owner. A token is minted for a list of repository
+        # names under one owner, so a foreign one would silently widen what the App is asked for.
+        owner="${GITHUB_REPOSITORY%%/*}"
+        names=""
+        while read -r repo; do
+          [ -z "$repo" ] && continue
+          case "$repo" in
+            "$owner"/*) names="${names}${repo##*/}," ;;
+            */*) echo "::error::$repo is outside $owner; this action only notifies within one owner"; exit 1 ;;
+            *) echo "::error::'$repo' is not owner/name"; exit 1 ;;
+          esac
+          echo "  will notify $repo"
+        done <<< "$repos"
+
+        echo "count=$(echo "$repos" | grep -c .)" >> "$GITHUB_OUTPUT"
+        echo "names=${names%,}" >> "$GITHUB_OUTPUT"
+        {
+          echo "repos<<MANIFEST_EOF"
+          echo "$repos"
+          echo "MANIFEST_EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    # One token covering every destination. create-github-app-token takes a list, which keeps
+    # this a plain step instead of a loop that mints per repository.
+    - name: Mint a token scoped to those repositories
+      id: app
+      if: steps.read.outputs.count != '0'
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ inputs.app-client-id }}
+        private-key: ${{ inputs.app-private-key }}
+        owner: ${{ github.repository_owner }}
+        repositories: ${{ steps.read.outputs.names }}
+        permission-contents: write
+
+    - name: Dispatch to each one
+      if: steps.read.outputs.count != '0'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.app.outputs.token }}
+        REPOS: ${{ steps.read.outputs.repos }}
+        TAG: ${{ inputs.tag }}
+        EVENT_TYPE: ${{ inputs.event-type }}
+        WRAPPER: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+      run: |
+        set -euo pipefail
+
+        # Failures are collected rather than fatal on the first one, so a second destination is
+        # still told when the first has lost its App installation. The step still fails at the
+        # end: a notification that does not arrive and does not say so is worse than none, which
+        # is the same lesson nuget-publish taught when its push reported success without pushing.
+        failed=0
+        while read -r repo; do
+          [ -z "$repo" ] && continue
+          if gh api -X POST "repos/$repo/dispatches" \
+               -f "event_type=$EVENT_TYPE" \
+               -F "client_payload[tag]=$TAG" \
+               -F "client_payload[wrapper]=$WRAPPER" \
+               -F "client_payload[run_id]=$RUN_ID"; then
+            echo "  notified $repo about $TAG"
+          else
+            echo "::error::could not dispatch $EVENT_TYPE to $repo"
+            failed=1
+          fi
+        done <<< "$REPOS"
+
+        exit $failed
