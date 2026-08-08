@@ -4,6 +4,18 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.28.0] - 2026-08-08
+
+### Added
+
+- **`notify-downstream`, so a wrapper's release reaches its binding without waiting for a clock.** The two wrapper-binding pairs in the fleet -- `CesiumC` to `Cesium.NET` and `JoltPhysicsC` to `JoltPhysics.NET` -- discover a new release from a monthly cron that fires the day *before* the wrapper's porter agent runs. The binding therefore looks 26 hours too early, and since cutting the release is a manual dispatch on top of that, a version takes two months to reach a package instead of one.
+
+  The action reads a new `downstream:` key from `binding.yml` and sends a `repository_dispatch` of type `upstream-released` carrying the tag, the wrapper and the run id. Who consumes whom is a fact about the project, so it lives in the manifest rather than in a workflow, like everything else the fleet declares.
+
+  `GITHUB_TOKEN` cannot do this — it has no reach outside its own repository. The App can, and needs no new secret: `APP_CLIENT_ID` and `APP_PRIVATE_KEY` are already organisation-wide with visibility `all`. What differs from every other mint in this fleet is the scoping, since those all narrow the token to the repository doing the minting, explicitly or by omission. Confirmed before writing any of this by minting a token from CesiumC scoped to Cesium.NET and having the dispatch accepted.
+
+  A manifest with no `downstream:` key is not an error, but it says so in the log: "nothing happened" and "nothing was meant to happen" are otherwise indistinguishable. A destination outside the owner is refused rather than quietly widening what the App is asked for. And a dispatch that fails fails the step, after trying the rest — a notification that does not arrive and does not say so is worse than none, which is what `nuget-publish` taught this week.
+
 ## [1.27.0] - 2026-08-08
 
 ### Fixed
