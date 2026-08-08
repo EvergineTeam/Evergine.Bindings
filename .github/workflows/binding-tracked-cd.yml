@@ -199,11 +199,25 @@ on:
         description: 'Email addresses to send failure notifications to'
         required: false
       EVERGINE_EMAIL:
-        description: 'Sender email address for notifications' 
+        description: 'Sender email address for notifications'
         required: false
+
+    outputs:
+      packaged:
+        description: >-
+          Whether this run produced NuGet packages, so the caller knows whether the
+          nuget-packages artifact exists. A run where the generated API did not move packs
+          nothing, and a caller that then tries to test or publish that artifact fails on a
+          download rather than on anything meaningful. Needed by any caller that puts its own
+          jobs after this one -- a smoke test before publishing, for instance.
+        value: ${{ jobs.build_and_publish.outputs.packaged }}
+
 jobs:
   build_and_publish:
     runs-on: ${{ inputs.runner-os }}
+    outputs:
+      # The same condition the packing, listing and upload steps carry, in one place.
+      packaged: ${{ steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5

@@ -4,6 +4,14 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.29.0] - 2026-08-08
+
+### Added
+
+- **`binding-tracked-cd` now reports whether it packaged anything.** It declared no outputs at all, so a caller could not tell a run that produced packages from one where the generated API had not moved and nothing was packed. Any caller wanting to put its own jobs after the CD -- a smoke test standing between packing and publishing, for instance -- would try to download an artifact that does not always exist, and fail on the download rather than on anything meaningful.
+
+  `packaged` carries the same condition the packing, listing and upload steps already share, in one place.
+
 ## [1.28.0] - 2026-08-08
 
 ### Added
