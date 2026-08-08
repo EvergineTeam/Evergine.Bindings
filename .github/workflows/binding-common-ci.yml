@@ -127,6 +127,52 @@ jobs:
           build-configuration: ${{ inputs.build-configuration }}
           restore-workloads: ${{ inputs.restore-workloads }}
       
+      # Six repositories ship a buildTransitive targets file, and nothing reads it until a
+      # consumer does. The build below compiles the binding project and the pack step wraps it,
+      # but neither imports the file, so a malformed one passes every check here and breaks
+      # downstream with an error naming the consumer rather than the file.
+      #
+      # That is not hypothetical. Evergine.Bindings.CesiumNative shipped one with "--" inside an
+      # XML comment, which XML forbids; MSBuild answered MSB4024, the import stopped, and all
+      # eight legs of a package smoke test failed at once, five of them on platforms the change
+      # never touched. The pull request that introduced it was green.
+      #
+      # A parse, not a build. It catches the whole class of malformed file for the cost of
+      # reading a few kilobytes, and it runs before packing because a package carrying a targets
+      # file that cannot load should not exist.
+      - name: Check the buildTransitive files parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'CHECK'
+          import glob, sys
+          import xml.dom.minidom as minidom
+
+          paths = sorted(
+              p for pattern in ("**/buildTransitive/*.targets", "**/buildTransitive/*.props")
+              for p in glob.glob(pattern, recursive=True)
+              # bin and obj hold copies of the same file; reporting one fault twice helps nobody.
+              if "/bin/" not in p.replace("\\", "/") and "/obj/" not in p.replace("\\", "/")
+          )
+
+          if not paths:
+              print("  no buildTransitive files in this repository")
+              sys.exit(0)
+
+          bad = 0
+          for path in paths:
+              try:
+                  minidom.parse(path)
+                  print("  ok    %s" % path)
+              except Exception as error:
+                  bad += 1
+                  # The message carries line and column, which is the part that turns this from
+                  # "something is wrong" into a fix.
+                  print("::error file=%s::%s" % (path, error))
+
+          sys.exit(1 if bad else 0)
+          CHECK
+
       - name: Restore .NET workloads for binding project
         if: inputs.nuget-artifacts == false
         shell: pwsh
