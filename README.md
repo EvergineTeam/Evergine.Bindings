@@ -171,4 +171,12 @@ The following bindings are currently available in this repository:
 [![CD](https://github.com/EvergineTeam/Embree.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Embree.NET/actions/workflows/CD.yml)
 [![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.Embree?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.Embree)
 
+### [Tracy.NET](https://github.com/EvergineTeam/Tracy.NET)
+* Low-level bindings for the [Tracy profiler](https://github.com/wolfpld/tracy) CPU client in C#
+* Auto-generated from TracyC.h using CppAst
+
+[![CI](https://github.com/EvergineTeam/Tracy.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/Tracy.NET/actions/workflows/CI.yml)
+[![CD](https://github.com/EvergineTeam/Tracy.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Tracy.NET/actions/workflows/CD.yml)
+[![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.Tracy?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.Tracy)
+
 This README serves as a centralized hub for all the bindings available in this repository. You can find more information about each binding by clicking on the links above.
