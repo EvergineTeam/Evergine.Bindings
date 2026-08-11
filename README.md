@@ -163,4 +163,12 @@ The following bindings are currently available in this repository:
 [![CD](https://github.com/EvergineTeam/MuJoCo.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/MuJoCo.NET/actions/workflows/CD.yml)
 [![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.MuJoCo?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.MuJoCo)
 
+### [Embree.NET](https://github.com/EvergineTeam/Embree.NET)
+* Low-level bindings for [Embree](https://github.com/RenderKit/embree), Intel's ray tracing kernel library, in C#
+* Auto-generated from the Embree 4 public headers using CppAst
+
+[![CI](https://github.com/EvergineTeam/Embree.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/Embree.NET/actions/workflows/CI.yml)
+[![CD](https://github.com/EvergineTeam/Embree.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Embree.NET/actions/workflows/CD.yml)
+[![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.Embree?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.Embree)
+
 This README serves as a centralized hub for all the bindings available in this repository. You can find more information about each binding by clicking on the links above.
