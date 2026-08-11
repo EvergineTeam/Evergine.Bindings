@@ -155,4 +155,12 @@ The following bindings are currently available in this repository:
 [![CD](https://github.com/EvergineTeam/JoltPhysics.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/JoltPhysics.NET/actions/workflows/CD.yml)
 [![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.JoltPhysics?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.JoltPhysics)
 
+### [MuJoCo.NET](https://github.com/EvergineTeam/MuJoCo.NET)
+* Low-level bindings for [MuJoCo](https://github.com/google-deepmind/mujoco) in C#
+* Auto-generated from the MuJoCo public headers using CppAst
+
+[![CI](https://github.com/EvergineTeam/MuJoCo.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/MuJoCo.NET/actions/workflows/CI.yml)
+[![CD](https://github.com/EvergineTeam/MuJoCo.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/MuJoCo.NET/actions/workflows/CD.yml)
+[![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.MuJoCo?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.MuJoCo)
+
 This README serves as a centralized hub for all the bindings available in this repository. You can find more information about each binding by clicking on the links above.
