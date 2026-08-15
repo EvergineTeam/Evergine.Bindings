@@ -1,13 +1,36 @@
+/* Dark is the base palette. Light is defined twice on purpose: once behind the
+   media query for whoever never touches the toggle, and once behind
+   [data-theme] for whoever does. Without the second, a reader on a dark OS who
+   picks light would keep the dark palette. */
 :root {
+  color-scheme: dark;
   --bg: #0b0c0e; --panel: #141619; --line: #24272c;
   --ink: #e7e9ea; --dim: #8b9199;
   --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444; --idle: #71717a;
   /* Per-agent hues, kept consistent with the FrameStudio panel so the two
      dashboards read as the same family. */
   --updater: #3b82f6; --doctor: #06b6d4; --toolbox: #a855f7;
+  --tint: 18%;
 }
+
+/* Status and agent hues are darkened for light mode: the dark-mode greens and
+   ambers fall below readable contrast on a white panel. */
 @media (prefers-color-scheme: light) {
-  :root { --bg: #f7f8f9; --panel: #fff; --line: #e3e6ea; --ink: #14161a; --dim: #5c636b; }
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f7f8f9; --panel: #fff; --line: #e3e6ea; --ink: #14161a; --dim: #5c636b;
+    --ok: #15803d; --warn: #b45309; --bad: #dc2626; --idle: #6b7280;
+    --updater: #1d4ed8; --doctor: #0e7490; --toolbox: #7e22ce;
+    --tint: 12%;
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f7f8f9; --panel: #fff; --line: #e3e6ea; --ink: #14161a; --dim: #5c636b;
+  --ok: #15803d; --warn: #b45309; --bad: #dc2626; --idle: #6b7280;
+  --updater: #1d4ed8; --doctor: #0e7490; --toolbox: #7e22ce;
+  --tint: 12%;
 }
 
 * { box-sizing: border-box; }
@@ -69,9 +92,9 @@ th {
 td { padding: 8px 10px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 .pill { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; font-weight: 500; }
-.pill.success { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
-.pill.failure { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
-.pill.other { background: color-mix(in srgb, var(--idle) 22%, transparent); color: var(--dim); }
+.pill.success { background: color-mix(in srgb, var(--ok) var(--tint), transparent); color: var(--ok); }
+.pill.failure { background: color-mix(in srgb, var(--bad) var(--tint), transparent); color: var(--bad); }
+.pill.other { background: color-mix(in srgb, var(--idle) var(--tint), transparent); color: var(--dim); }
 .agent { font-weight: 500; }
 .agent.updater { color: var(--updater); }
 .agent.doctor { color: var(--doctor); }
@@ -91,10 +114,32 @@ footer { margin-top: 34px; color: var(--dim); font-size: 11.5px; line-height: 1.
   padding: 1px 7px; border-radius: 99px; font-variant-numeric: tabular-nums;
   border: 1px solid transparent;
 }
-.chip.ok   { background: color-mix(in srgb, var(--ok) 16%, transparent);   color: var(--ok);   border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
-.chip.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
-.chip.bad  { background: color-mix(in srgb, var(--bad) 16%, transparent);  color: var(--bad);  border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
-.chip.idle { background: color-mix(in srgb, var(--idle) 18%, transparent); color: var(--dim); }
+.chip.ok   { background: color-mix(in srgb, var(--ok) var(--tint), transparent);   color: var(--ok);   border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.chip.warn { background: color-mix(in srgb, var(--warn) var(--tint), transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.chip.bad  { background: color-mix(in srgb, var(--bad) var(--tint), transparent);  color: var(--bad);  border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.chip.idle { background: color-mix(in srgb, var(--idle) var(--tint), transparent); color: var(--dim); }
+/* Theme toggle: the one piece of client-side JavaScript on the site. Pushed to
+   the end of the header row, and self-aligned because the row is baseline-aligned
+   for the title and its timestamp. */
+.theme {
+  margin-left: auto; align-self: center; display: inline-flex;
+  align-items: center; justify-content: center; width: 30px; height: 30px;
+  padding: 0; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); color: var(--dim); cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.theme:hover { color: var(--ink); border-color: var(--dim); }
+.theme:focus-visible { outline: 2px solid var(--updater); outline-offset: 2px; }
+.theme svg { width: 15px; height: 15px; display: block; }
+/* Each icon offers the theme you would switch to, so only one is ever shown. */
+.theme .moon { display: none; }
+:root[data-theme="light"] .theme .moon { display: block; }
+:root[data-theme="light"] .theme .sun { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .theme .moon { display: block; }
+  :root:not([data-theme="dark"]) .theme .sun { display: none; }
+}
+
 .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--dim); font-size: 11.5px; margin: -4px 0 10px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .swatch { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
