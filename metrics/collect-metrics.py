@@ -33,6 +33,7 @@ FLEET = [
     "Vulkan.NET", "OpenXR.NET", "OpenGL.NET", "WebGPU.NET", "KTX.NET",
     "ImGui.Net", "xatlas.NET", "Meshoptimizer.NET", "RenderDoc.NET",
     "JoltPhysics.NET", "Cesium.NET", "MuJoCo.NET", "Embree.NET", "Tracy.NET",
+    "Thorvg.NET",
     # Publishes Evergine.Bindings.Vuforia and was already listed in this repository's
     # README with its badges, while the dashboard did not know it existed.
     "Vuforia.NET",
