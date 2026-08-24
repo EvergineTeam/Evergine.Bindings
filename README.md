@@ -179,4 +179,12 @@ The following bindings are currently available in this repository:
 [![CD](https://github.com/EvergineTeam/Tracy.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Tracy.NET/actions/workflows/CD.yml)
 [![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.Tracy?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.Tracy)
 
+### [Thorvg.NET](https://github.com/EvergineTeam/Thorvg.NET)
+* Low-level bindings for [ThorVG](https://github.com/thorvg/thorvg), a lightweight vector graphics engine that rasterises SVG, Lottie animations, text and shapes, in C#
+* Generated from the ThorVG C API
+
+[![CI](https://github.com/EvergineTeam/Thorvg.NET/actions/workflows/CI.yml/badge.svg)](https://github.com/EvergineTeam/Thorvg.NET/actions/workflows/CI.yml)
+[![CD](https://github.com/EvergineTeam/Thorvg.NET/actions/workflows/CD.yml/badge.svg)](https://github.com/EvergineTeam/Thorvg.NET/actions/workflows/CD.yml)
+[![Nuget](https://img.shields.io/nuget/v/Evergine.Bindings.ThorVG?logo=nuget)](https://www.nuget.org/packages/Evergine.Bindings.ThorVG)
+
 This README serves as a centralized hub for all the bindings available in this repository. You can find more information about each binding by clicking on the links above.
