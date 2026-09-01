@@ -39,6 +39,18 @@ inputs:
       and the first CD after release tracking committed code that did not compile.
     required: false
     default: "false"
+  bump:
+    description: >-
+      Override `upstream.bump` for this call. Empty means obey the manifest.
+
+      The agentic binding-updater passes `report-only`. gh-aw checks the repository out
+      with `submodules: false` and that is not configurable from a workflow's `steps:`,
+      so a manifest declaring `bump: together` would send the adapter down the mutating
+      path with nothing to mutate: git then resolves the parent repository from the
+      submodule's empty directory and fails on "upload-pack: not our ref". Every
+      deterministic caller clones submodules first and leaves this empty.
+    required: false
+    default: ""
 
 outputs:
   changed:
@@ -91,6 +103,7 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         RESOLVE_ONLY: ${{ inputs.resolve-only }}
         AT_RECORDED_RELEASE: ${{ inputs.at-recorded-release }}
+        BUMP_OVERRIDE: ${{ inputs.bump }}
       run: |
         set -euo pipefail
         # Windows runners ship `python`, not `python3`, and `pip` is not always on

@@ -98,15 +98,85 @@ jobs:
           fi
           installed=$(printf '%s\n' "$shas" | head -n1)
           latest=$(gh api "repos/${{ inputs.toolbox }}/commits/${{ inputs.ref }}" --jq .sha)
-          echo "installed: $installed"
-          echo "latest:    $latest"
-          if [ "$installed" = "$latest" ]; then
-            echo "Already on the current release."
+          echo "toolbox installed: $installed"
+          echo "toolbox latest:    $latest"
+          toolbox_moved=false
+          [ "$installed" = "$latest" ] || toolbox_moved=true
+
+          # Second, independent axis of drift: the gh-aw compiler.
+          #
+          # A repository keeps the compiler it was last compiled with, recorded in the
+          # `# gh-aw-metadata:` line at the top of every lock file. Nothing recompiles it
+          # when gh-aw ships a fix, and nothing fails in the meantime -- which is how the
+          # whole fleet sat on v0.85.4 for three weeks while gh-aw fixed the Copilot CLI
+          # toolcache bug that killed five Binding Updater runs on 1 September. This job
+          # ran on schedule four times in that window and reported "already current" every
+          # time, because until now it only ever looked at the toolbox SHA.
+          #
+          # `|| true` because a lock file whose first line does not carry the metadata --
+          # an upstream schema change, a hand-edited file -- makes grep exit 1, and under
+          # `pipefail` that would take the whole step down. Losing the check is bad; losing
+          # the job that performs it is worse.
+          locks=$(find .github/workflows -maxdepth 1 -name '*.lock.yml' | wc -l)
+          compilers=$(for f in .github/workflows/*.lock.yml; do
+                        [ -e "$f" ] || continue
+                        head -n1 "$f" | grep -oE '"compiler_version":"[^"]*"' | cut -d'"' -f4 || true
+                      done | sort -u)
+          # Ask the CLI that will do the compiling rather than the release feed. They agree
+          # today, because `Install gh-aw` takes the latest release, but the answer that
+          # matters is what `gh aw compile` will stamp into the locks.
+          current=$(gh aw version 2>/dev/null | grep -oE 'v?[0-9]+[.][0-9]+[.][0-9]+' | head -n1 || true)
+          if [ -z "$current" ]; then
+            echo "::warning::no version found in 'gh aw version' output; using the release feed"
+            current=$(gh release view --repo github/gh-aw --json tagName --jq .tagName)
+          fi
+          current="v${current#v}"
+          compiler_moved=false
+          for c in $compilers; do
+            [ "v${c#v}" = "$current" ] || compiler_moved=true
+          done
+          # Locks present but none readable: recompile rather than assume. Reading nothing
+          # and concluding "current" is exactly the silence this check exists to break.
+          if [ "$locks" -gt 0 ] && [ -z "$compilers" ]; then
+            echo "::warning::no compiler_version found in any lock file; recompiling to be safe"
+            compiler_moved=true
+          fi
+          installed_compiler=$(printf '%s ' $compilers | sed 's/ $//')
+          echo "compiler installed: ${installed_compiler:-none}"
+          echo "compiler latest:    $current"
+
+          if [ "$toolbox_moved" = true ] && [ "$compiler_moved" = true ]; then
+            reason=both
+          elif [ "$toolbox_moved" = true ]; then
+            reason=toolbox
+          elif [ "$compiler_moved" = true ]; then
+            reason=compiler
+          else
+            reason=none
+          fi
+
+          # A PR that moves no toolbox SHA must not say it repinned one.
+          if [ "$reason" = compiler ]; then
+            title="chore: recompile agents against gh-aw $current"
+          else
+            title="chore: update agents to the current toolbox release"
+          fi
+
+          {
+            echo "reason=$reason"
+            echo "title=$title"
+            echo "installed_sha=$installed"
+            echo "latest_sha=$latest"
+            echo "installed_compiler=${installed_compiler:-unknown}"
+            echo "latest_compiler=$current"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$reason" = none ]; then
+            echo "Already on the current release, compiled by the current gh-aw."
             echo "outdated=false" >> "$GITHUB_OUTPUT"
           else
+            echo "Recompiling: $reason drift."
             echo "outdated=true" >> "$GITHUB_OUTPUT"
-            echo "installed_sha=$installed" >> "$GITHUB_OUTPUT"
-            echo "latest_sha=$latest" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Reinstall and recompile
@@ -115,6 +185,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Reinstalled even when only the compiler drifted, where it repins the toolbox to
+          # the SHA it already had. That is a no-op on the tree and it keeps one code path
+          # instead of two; `gh aw compile` below is what the compiler case is here for.
           gh aw add "${{ inputs.toolbox }}@${{ inputs.ref }}" --force
 
           # `gh aw add` regenerates the authoring scaffolding that binding repositories
@@ -141,27 +214,35 @@ jobs:
           token: ${{ steps.app.outputs.token }}
           branch: chore/toolbox-update
           delete-branch: true
-          title: "chore: update agents to the current toolbox release"
+          title: ${{ steps.check.outputs.title }}
           commit-message: |
-            chore: update agents to the current toolbox release
+            ${{ steps.check.outputs.title }}
 
-            Repins the installed agentic workflows from
-            ${{ steps.check.outputs.installed_sha }} to
-            ${{ steps.check.outputs.latest_sha }} and recompiles.
+            Toolbox ${{ steps.check.outputs.installed_sha }} -> ${{ steps.check.outputs.latest_sha }}
+            Compiler ${{ steps.check.outputs.installed_compiler }} -> ${{ steps.check.outputs.latest_compiler }}
+            Drift: ${{ steps.check.outputs.reason }}
           labels: agent:toolbox-update
           body: |
-            Repins the installed agentic workflows to the current
-            `${{ inputs.ref }}` of [`${{ inputs.toolbox }}`](https://github.com/${{ inputs.toolbox }}).
+            Brings the installed agentic workflows back in step with the current
+            `${{ inputs.ref }}` of [`${{ inputs.toolbox }}`](https://github.com/${{ inputs.toolbox }})
+            and the current gh-aw compiler.
 
-            | | |
-            |---|---|
-            | Installed | `${{ steps.check.outputs.installed_sha }}` |
-            | Current | `${{ steps.check.outputs.latest_sha }}` |
+            | | Installed | Current |
+            |---|---|---|
+            | Toolbox | `${{ steps.check.outputs.installed_sha }}` | `${{ steps.check.outputs.latest_sha }}` |
+            | Compiler | `${{ steps.check.outputs.installed_compiler }}` | `${{ steps.check.outputs.latest_compiler }}` |
 
-            Moving the toolbox tag does not update anything on its own — a
-            repository keeps the commit it was compiled against until something
-            recompiles it, and nothing fails in the meantime. That is what makes
-            the drift easy to accumulate and invisible without looking.
+            What drifted: **${{ steps.check.outputs.reason }}**. A row whose two
+            columns match did not move and is shown so the other one can be read
+            against it.
+
+            Neither moving the toolbox tag nor gh-aw cutting a release updates
+            anything on its own — a repository keeps the commit and the compiler it
+            was built against until something recompiles it, and nothing fails in
+            the meantime. That is what makes the drift easy to accumulate and
+            invisible without looking, and it is why compiler drift is checked at
+            all: the fleet sat on gh-aw v0.85.4 for three weeks past a fix it
+            needed, while this job reported everything current.
 
             Review the diff as you would any workflow change: the compiled
             `.lock.yml` files are generated, but the `.md` frontmatter is not.
