@@ -72,7 +72,7 @@ jobs:
           # it. One module rather than a copy in each, because that logic is exactly the
           # kind that gets fixed in one place and left broken in the other.
           for tool in check-native-coherence.py dump-exports.py check-exports-fresh.py \
-                      check-native-arch.py native_paths.py; do
+                      check-native-arch.py check-native-page-size.py native_paths.py; do
             gh api "repos/EvergineTeam/Evergine.Bindings/contents/tools/$tool?ref=${{ inputs.toolbox-ref }}" \
               -H 'Accept: application/vnd.github.raw' > ".coherence/$tool"
           done
@@ -95,6 +95,20 @@ jobs:
       - name: Check each library matches the architecture its RID promises
         shell: bash
         run: python .coherence/check-native-arch.py "${{ inputs.manifest }}"
+
+      # Its neighbour above reads the machine field; this one reads the program headers of
+      # the same file. A 64-bit Android library whose LOAD segments align to 4 KB links,
+      # loads, and passes every check here -- including the smoke test, whose runner has
+      # 4 KB pages. What it cannot do is be published: Google Play refuses such updates
+      # from 1 February 2027, and the rejection lands on whoever ships an application built
+      # on this package, months after the build that caused it went green.
+      #
+      # CesiumC shipped exactly that for as long as it had shipped Android. Nothing asked
+      # for 4 KB -- the runner's NDK was r27c and the flag was absent, so the default
+      # decided it and nothing looked.
+      - name: Check Android libraries tolerate 16 KB pages
+        shell: bash
+        run: python .coherence/check-native-page-size.py "${{ inputs.manifest }}"
 
       - name: Check every declaration resolves
         shell: bash
