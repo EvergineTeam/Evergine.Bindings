@@ -31,11 +31,32 @@ RESOLVE_ONLY = os.environ.get("RESOLVE_ONLY", "").lower() == "true"
 # drift check: what changes is then a difference between the tree and its own declared
 # revision, not upstream having moved on.
 PIN_RECORDED = os.environ.get("AT_RECORDED_RELEASE", "").lower() == "true"
+# Force `upstream.bump` to a particular mode regardless of what the manifest says.
+# The agentic updater sets `report-only` because gh-aw checks the repository out with
+# `submodules: false` and that is not configurable from a workflow's `steps:`, so the
+# mutating path could never work there. Empty means: obey the manifest.
+BUMP_OVERRIDE = os.environ.get("BUMP_OVERRIDE", "").strip()
+
+# The report is accumulated here rather than in a local, so `fail` can still flush it.
+# The agent's whole contract is "read the report"; leaving it with no file, or with the
+# one from last month, tells it nothing about why this run stopped.
+REPORT_LINES = []
 
 
 def fail(message):
     """Abort loudly. A half-fetched tree is worse than no fetch at all."""
     print(f"::error::{message}")
+    REPORT_LINES.append(
+        f"\n\n## Upstream fetch failed\n\n{message}\n\n"
+        "Nothing below this point ran. The working tree may hold a partial fetch.\n"
+    )
+    try:
+        REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        REPORT_PATH.write_text("".join(REPORT_LINES), encoding="utf-8")
+    except OSError:
+        # The report is a courtesy to the agent, not the point of the run. If it cannot
+        # be written the ::error:: above is still on the job, which is what fails it.
+        pass
     sys.exit(1)
 
 
@@ -404,10 +425,17 @@ def submodule_state(source):
     return local_sha, head
 
 
-def git(args, cwd=None):
-    """Run git, failing loudly. A half-moved set of submodules is worse than none."""
+def git(args, cwd=None, check=True):
+    """Run git. With `check`, fail loudly: a half-moved set of submodules is worse than none.
+
+    `check=False` returns None instead for a caller that has a fallback. It exists because
+    routing a recoverable failure through `fail` printed a red `::error::` on a job that
+    then went on to succeed, and anything reading the log could not tell the two apart.
+    """
     result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
     if result.returncode != 0:
+        if not check:
+            return None
         fail(f"git {' '.join(args)} failed: {result.stderr.strip() or result.stdout.strip()}")
     return result.stdout
 
@@ -418,11 +446,15 @@ def bump_submodule(path, sha):
     The working copy may be shallow, so ask for the single commit rather than the
     whole history; a checkout is not enough on its own when the object is absent.
     """
-    if not Path(path, ".git").exists() and not Path(path).is_dir():
+    # `.git` is a file in a submodule worktree, not a directory, so `exists()` rather than
+    # `is_dir()`. Checking that the path merely exists is not enough: a checkout with
+    # `submodules: false` leaves the directory behind, empty. git then discovers the
+    # *parent* repository from the cwd and asks it for a commit it has never heard of,
+    # which is how ImGui.Net's run died on "upload-pack: not our ref" -- a message that
+    # names neither the submodule nor the real cause.
+    if not Path(path, ".git").exists():
         fail(f"{path} is not checked out -- the caller must clone submodules")
-    try:
-        git(["fetch", "--depth", "1", "origin", sha], cwd=path)
-    except SystemExit:
+    if git(["fetch", "--depth", "1", "origin", sha], cwd=path, check=False) is None:
         git(["fetch", "origin"], cwd=path)
     git(["checkout", "--detach", sha], cwd=path)
 
@@ -460,7 +492,10 @@ def main():
     manifest = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
     upstream = manifest["upstream"]
     kind = upstream["kind"]
-    lines = [f"# Upstream check\n", f"Adapter: `{kind}`  \n"]
+    # Alias, not a fresh list: `fail` flushes REPORT_LINES, so everything appended
+    # below has to land in the same object.
+    lines = REPORT_LINES
+    lines += [f"# Upstream check\n", f"Adapter: `{kind}`  \n"]
     changed = False
 
     submodule_heads = ""
@@ -563,9 +598,15 @@ def main():
                 "the manifest. There is nothing to fetch and nothing to bring up to date.\n"
             )
     elif kind == "git-submodule":
-        bump = upstream.get("bump", "report-only")
+        bump = BUMP_OVERRIDE or upstream.get("bump", "report-only")
         if bump not in ("report-only", "together"):
-            fail(f"unknown upstream.bump '{bump}' (expected report-only or together)")
+            source = "input bump" if BUMP_OVERRIDE else "upstream.bump"
+            fail(f"unknown {source} '{bump}' (expected report-only or together)")
+        if BUMP_OVERRIDE and BUMP_OVERRIDE != upstream.get("bump", "report-only"):
+            lines.append(
+                f"\n> Caller forced `bump: {BUMP_OVERRIDE}`, overriding the "
+                f"manifest's `{upstream.get('bump', 'report-only')}`.\n"
+            )
 
         # Every head is resolved before anything moves. Under `together` the set has to
         # land as one revision: these submodules compile into a single binary and share

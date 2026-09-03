@@ -47,6 +47,14 @@ steps:
   - name: Fetch upstream sources
     id: upstream
     uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-fetch-upstream@v1
+    with:
+      # Report the gap, never close it. gh-aw checks the repository out with
+      # `submodules: false` and that is not configurable from here, so a manifest
+      # declaring `bump: together` -- ImGui.Net's does -- would send the adapter into
+      # empty submodule directories, where git resolves the parent repository instead
+      # and dies on "upload-pack: not our ref". Closing the gap is `binding-tracked-cd`'s
+      # job anyway: bumping these pointers means rebuilding native binaries.
+      bump: report-only
 tools:
   github:
     mode: gh-proxy
