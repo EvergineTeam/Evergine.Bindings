@@ -108,6 +108,21 @@ footer { margin-top: 34px; color: var(--dim); font-size: 11.5px; line-height: 1.
 .back { color: var(--dim); text-decoration: none; font-size: 12px; }
 .back:hover { color: var(--ink); }
 
+/* Binding heading and its link to the repository. Both anchors go to the same
+   place: the name is where a reader clicks by reflex, the one on the right is
+   what makes the link visible at all. */
+.section-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.section-head h2 { flex: 1 1 auto; }
+.repo-title { text-decoration: none; }
+.repo-title:hover { color: var(--ink); }
+.repo-link {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  color: var(--dim); text-decoration: none; font-size: 12px;
+}
+.repo-link:hover { color: var(--ink); }
+.repo-link:focus-visible { outline: 2px solid var(--updater); outline-offset: 2px; border-radius: 4px; }
+.repo-link svg { width: 14px; height: 14px; flex: none; }
+
 /* Toolbox version chip: green current, amber one release back, red two or more. */
 .chip {
   display: inline-block; margin-top: 6px; font-size: 10.5px; font-weight: 600;
