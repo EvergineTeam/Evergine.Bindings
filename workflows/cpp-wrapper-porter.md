@@ -57,6 +57,11 @@ safe-outputs:
     allowed-labels: [agent:needs-human, agent:upstream-break]
     deduplicate-by-title: true
     max: 1
+  # gh-aw otherwise files every `noop` in a standing "[aw] No-Op Runs" issue per
+  # repository. "Upstream has not moved" is the expected answer most months, and an
+  # issue that says so twelve times a year is noise a real one has to compete with.
+  noop:
+    report-as-issue: false
 ---
 
 # C++ Wrapper Porter
@@ -91,10 +96,12 @@ knows it.
 **If `binding.yml` has no `wrapper:` block, call `noop` and stop immediately.** Say nothing,
 open nothing.
 
-You are installed from a package, so you arrive in every repository the toolbox serves, and
-almost none of them are hand-written wrappers — they have generators, and `binding-updater`
-looks after them. An agent that files an issue wherever it does not belong produces one piece
-of noise per repository per month, which is how a useful signal gets ignored.
+The toolbox installer only puts you where `binding.yml` has that block, so on a normal month
+this check passes without your noticing it. It stays because the installer is not the only way
+to arrive here: a `gh aw add` by hand, or a manifest edited after you were installed, lands
+you in a repository that has a generator and no wrapper, where `binding-updater` is the agent
+in charge. An agent that files an issue wherever it does not belong produces one piece of
+noise per repository per month, which is how a useful signal gets ignored.
 
 A `wrapper:` block present but naming a profile you cannot read is different: that is a
 repository claiming to be a wrapper and failing to say how. Open an issue for that one.
