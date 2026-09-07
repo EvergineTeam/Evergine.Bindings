@@ -3,8 +3,10 @@ name: Toolbox Updater (Reusable)
 description: >
   Keeps a binding's installed agentic workflows pinned to the current toolbox
   release. Compares the `source:` recorded in the installed workflows against the
-  latest tag, and when they differ reinstalls and recompiles, opening a pull
-  request with the result.
+  latest tag, the compiler stamped into the lock files against the current gh-aw,
+  and the set of installed agents against what `binding.yml` gives work to; when
+  any of the three differs it reinstalls and recompiles, opening a pull request
+  with the result.
 
   Deliberately not an agentic workflow. Comparing two versions, running
   `gh aw add --force` and recompiling is entirely deterministic -- there is
@@ -145,22 +147,48 @@ jobs:
           echo "compiler installed: ${installed_compiler:-none}"
           echo "compiler latest:    $current"
 
-          if [ "$toolbox_moved" = true ] && [ "$compiler_moved" = true ]; then
-            reason=both
-          elif [ "$toolbox_moved" = true ]; then
-            reason=toolbox
-          elif [ "$compiler_moved" = true ]; then
-            reason=compiler
-          else
-            reason=none
+          # Third axis: which agents belong here at all.
+          #
+          # The package carries three agents and `gh aw add` installs all of them, but
+          # two are conditional on the manifest: `cpp-wrapper-porter` has work only where
+          # `binding.yml` declares a `wrapper:` block, `binding-updater` only where it
+          # declares a `generator:`. Each notices on its own and calls `noop`, which still
+          # costs a runner and a model, and gh-aw files every `noop` in an "[aw] No-Op
+          # Runs" issue -- one per repository per month, in thirteen repositories that own
+          # no wrapper. The reinstall below removes what does not apply; checking the set
+          # here is what lets a repository carrying an agent it should not drift on its
+          # own, rather than waiting for the toolbox or the compiler to move.
+          expected_agents="ci-doctor"
+          if grep -qE '^generator:' binding.yml 2>/dev/null; then
+            expected_agents="binding-updater $expected_agents"
           fi
+          if grep -qE '^wrapper:' binding.yml 2>/dev/null; then
+            expected_agents="$expected_agents cpp-wrapper-porter"
+          fi
+          # Only the installed package counts: a repository's own agentic workflow, if it
+          # ever has one, carries no `source:` line and is not this job's to add or remove.
+          installed_agents=$(for f in .github/workflows/*.md; do
+                               [ -e "$f" ] || continue
+                               grep -q '^source:' "$f" && basename "$f" .md || true
+                             done | sort | tr '\n' ' ' | sed 's/ $//')
+          expected_agents=$(printf '%s\n' $expected_agents | sort | tr '\n' ' ' | sed 's/ $//')
+          echo "agents installed:   ${installed_agents:-none}"
+          echo "agents expected:    $expected_agents"
+          agents_moved=false
+          [ "$installed_agents" = "$expected_agents" ] || agents_moved=true
+
+          reason=""
+          [ "$toolbox_moved" = true ] && reason="${reason:+$reason+}toolbox"
+          [ "$compiler_moved" = true ] && reason="${reason:+$reason+}compiler"
+          [ "$agents_moved" = true ] && reason="${reason:+$reason+}agents"
+          reason=${reason:-none}
 
           # A PR that moves no toolbox SHA must not say it repinned one.
-          if [ "$reason" = compiler ]; then
-            title="chore: recompile agents against gh-aw $current"
-          else
-            title="chore: update agents to the current toolbox release"
-          fi
+          case "$reason" in
+            compiler) title="chore: recompile agents against gh-aw $current" ;;
+            agents)   title="chore: install only the agents this repository can use" ;;
+            *)        title="chore: update agents to the current toolbox release" ;;
+          esac
 
           {
             echo "reason=$reason"
@@ -169,6 +197,8 @@ jobs:
             echo "latest_sha=$latest"
             echo "installed_compiler=${installed_compiler:-unknown}"
             echo "latest_compiler=$current"
+            echo "installed_agents=${installed_agents:-none}"
+            echo "expected_agents=$expected_agents"
           } >> "$GITHUB_OUTPUT"
 
           if [ "$reason" = none ]; then
@@ -205,6 +235,18 @@ jobs:
           # Only if the installer's file was the only thing in it.
           rmdir .github/agents 2>/dev/null || true
 
+          # Keep only the agents the manifest gives work to; the check step says which.
+          # Removed before compiling, so no lock is produced for them, and removed as
+          # plain files rather than through `gh aw remove`, which has nothing to add here
+          # and one more surface to change under us.
+          for agent in binding-updater cpp-wrapper-porter; do
+            case " ${{ steps.check.outputs.expected_agents }} " in
+              *" $agent "*) ;;
+              *) echo "removing $agent: binding.yml gives it nothing to do here"
+                 rm -f ".github/workflows/$agent.md" ".github/workflows/$agent.lock.yml" ;;
+            esac
+          done
+
           gh aw compile --strict
 
       - name: Open a pull request
@@ -220,6 +262,7 @@ jobs:
 
             Toolbox ${{ steps.check.outputs.installed_sha }} -> ${{ steps.check.outputs.latest_sha }}
             Compiler ${{ steps.check.outputs.installed_compiler }} -> ${{ steps.check.outputs.latest_compiler }}
+            Agents ${{ steps.check.outputs.installed_agents }} -> ${{ steps.check.outputs.expected_agents }}
             Drift: ${{ steps.check.outputs.reason }}
           labels: agent:toolbox-update
           body: |
@@ -231,10 +274,14 @@ jobs:
             |---|---|---|
             | Toolbox | `${{ steps.check.outputs.installed_sha }}` | `${{ steps.check.outputs.latest_sha }}` |
             | Compiler | `${{ steps.check.outputs.installed_compiler }}` | `${{ steps.check.outputs.latest_compiler }}` |
+            | Agents | `${{ steps.check.outputs.installed_agents }}` | `${{ steps.check.outputs.expected_agents }}` |
 
             What drifted: **${{ steps.check.outputs.reason }}**. A row whose two
-            columns match did not move and is shown so the other one can be read
-            against it.
+            columns match did not move and is shown so the others can be read
+            against it. The agents column is decided by `binding.yml`:
+            `cpp-wrapper-porter` belongs where there is a `wrapper:` block,
+            `binding-updater` where there is a `generator:`, and `ci-doctor`
+            everywhere.
 
             Neither moving the toolbox tag nor gh-aw cutting a release updates
             anything on its own — a repository keeps the commit and the compiler it

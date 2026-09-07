@@ -4,6 +4,28 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.30.0] - 2026-09-07
+
+### Changed
+
+- **The Toolbox Updater installs each agent only where `binding.yml` gives it work.** `gh aw add` installs the package whole, so every consumer carried all three agents: `cpp-wrapper-porter` in thirteen repositories that have a generator and no wrapper, `binding-updater` in the two wrappers that have no generator. Each agent already noticed and called `noop`, which was the design -- but a `noop` still spends a runner and a model, and gh-aw records every one of them in a standing "[aw] No-Op Runs" issue per repository, which is where the 2 September cron left seven of them.
+
+  The rule is the manifest's: `cpp-wrapper-porter` where there is a `wrapper:` block, `binding-updater` where there is a `generator:`, `ci-doctor` everywhere. The updater removes what does not apply before compiling, and the installed set is a third axis of drift alongside the toolbox SHA and the compiler, so a repository carrying an agent it should not is corrected on the next weekly run rather than the next time something else moves. The agents keep their own guard for the other ways of arriving -- a `gh aw add` by hand, a manifest edited later.
+
+- **The agents no longer report `noop` as an issue.** `safe-outputs.noop.report-as-issue: false` in all three. For `binding-updater`, "upstream has not moved" is the expected answer most months; for `ci-doctor`, a flake that healed on re-run is the outcome the workflow exists for. An issue that says so twelve times a year is noise a real one has to compete with. Failures still open an issue: `report-failure-as-issue` is unchanged, because that one is signal.
+
+### Added
+
+- **`binding-native-coherence` refuses a 64-bit Android library that cannot be mapped on 16 KB pages.** Google Play requires it from 1 February 2027 and Cesium.NET had shipped a 4 KB-aligned arm64 library for as long as it has shipped Android, past every check the fleet had: the architecture check reads the machine field, the symbol check finds every symbol, and the smoke test runs on a 4 KB-page runner where the library loads fine. The property is in the ELF program headers -- each `PT_LOAD` segment's `p_align` -- and nothing else looks. 32-bit libraries are skipped and say so, since the requirement is 64-bit only; a library with no `PT_LOAD` segments fails rather than passes.
+
+### Fixed
+
+- **The Toolbox Updater recompiles when gh-aw moves, not only when the toolbox does.** Five of the six `[aw] Binding Updater failed` issues of the 1 September cron, and all eight `[aw] C++ Wrapper Porter failed` issues of the 2nd, were one gh-aw bug: on a runner with the Copilot CLI already in the toolcache, the installer activated it from there while the compiled lock spawned the hardcoded `/usr/local/bin/copilot`, and the engine died before producing a byte. gh-aw fixed that in v0.87.1 on 18 August. It kept reaching the fleet because nothing recompiles a repository when gh-aw ships a fix: this job compared the toolbox SHA and nothing else, ran on schedule four times through that window, and reported everything current while the fleet sat on the compiler from 8 August. The compiler each repository was built with is in the `# gh-aw-metadata:` line of every lock file; drift against the CLI that will do the compiling is now reason enough to recompile, and a pull request that moves no toolbox SHA no longer claims to have repinned one.
+
+- **`binding-fetch-upstream` no longer bumps a submodule it has not cloned.** The sixth failure was ours: ImGui.Net's manifest says `bump: together`, gh-aw checks out with `submodules: false`, and the guard for that combination asked two questions with `and` where it needed one -- is this path a repository. An empty directory passed, git resolved the parent repository from inside it, and the run died asking ImGui.Net for a commit belonging to cimgui ("upload-pack: not our ref"). The guard now asks the right question, and `binding-updater` passes the new `bump: report-only`, so the agent can never take the mutating path at all; rebuilding native binaries is `binding-tracked-cd`'s job, as the workflow's prose always said. Found in the same file: `fail` now flushes the upstream report before exiting, so a failed run leaves a current report rather than none or last month's, and the shallow-fetch fallback no longer prints `::error::` on runs that go on to succeed.
+
+- **The licence year.** The notice said 2024 since the file was written; this repository has no `sync-standards.yml`, so the sync that distributes `LICENSE` to the binding repositories never touched the one it comes from.
+
 ## [1.29.0] - 2026-08-08
 
 ### Added

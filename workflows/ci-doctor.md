@@ -61,6 +61,11 @@ safe-outputs:
     allowed-labels: [agent:needs-regen, agent:upstream-break, agent:needs-human]
     deduplicate-by-title: true
     max: 1
+  # gh-aw otherwise files every `noop` in a standing "[aw] No-Op Runs" issue per
+  # repository. A flake that healed on re-run, or a failure already on file, is the
+  # right outcome and not one worth an issue that a real failure has to compete with.
+  noop:
+    report-as-issue: false
 ---
 
 # CI Doctor
