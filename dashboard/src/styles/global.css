@@ -81,6 +81,11 @@ h2 {
 .tile .v { font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .tile .s { color: var(--dim); font-size: 11.5px; margin-top: 2px; }
 .v.good { color: var(--ok); } .v.bad { color: var(--bad); } .v.warn { color: var(--warn); }
+/* A tile that is a link. Only the border answers the hover: the .card lift
+   reads as a jump when it happens to one cell of a nine-cell grid. */
+a.tile { display: block; text-decoration: none; transition: border-color .15s; }
+a.tile:hover { border-color: var(--dim); }
+a.tile:focus-visible { outline: 2px solid var(--updater); outline-offset: 2px; }
 
 .scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }

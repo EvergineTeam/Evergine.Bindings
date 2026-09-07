@@ -38,6 +38,18 @@ const tiles = [
     k: "Freshness", v: age !== null ? `${age}d` : "—",
     s: "since last release", cls: freshnessClass(age),
   },
+  // Repository-wide, unlike the three agent tiles below: the big figure is what
+  // is open now, and GitHub's own /issues and /pulls default to that same view.
+  {
+    k: "Issues", v: info.issues?.open ?? "—",
+    s: info.issues ? `${info.issues.total} total` : "not collected yet",
+    href: `${repoUrl}/issues`,
+  },
+  {
+    k: "Pull requests", v: info.pulls?.open ?? "—",
+    s: info.pulls ? `${info.pulls.total} total` : "not collected yet",
+    href: `${repoUrl}/pulls`,
+  },
   { k: "Agent runs", v: runs.length, s: `${credits.toFixed(2)} credits · ${money(credits * 0.01)}` },
   {
     k: "Agent PRs", v: info.prs.total,
@@ -68,13 +80,16 @@ const tiles = [
     </a>
   </div>
   <div class="tiles">
-    {tiles.map((x) => (
-      <div class="tile">
-        <div class="k">{x.k}</div>
-        <div class:list={["v", x.cls]}>{x.v}</div>
-        <div class="s">{x.s}</div>
-      </div>
-    ))}
+    {tiles.map((x) => {
+      const Tag = x.href ? "a" : "div";
+      return (
+        <Tag class="tile" href={x.href}>
+          <div class="k">{x.k}</div>
+          <div class:list={["v", x.cls]}>{x.v}</div>
+          <div class="s">{x.s}</div>
+        </Tag>
+      );
+    })}
   </div>
 
   <h2>Pipelines</h2>

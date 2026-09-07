@@ -279,6 +279,17 @@ def collect_repo(repo, since, releases, current_agents):
     agent_prs = [p for p in prs if any(l["name"].startswith("agent:") for l in p.get("labels", []))]
     issues = api(f"repos/{ORG}/{repo}/issues?state=all&labels=agent:needs-human&per_page=50", paginate=True) or []
 
+    # The repository's own issues and pull requests, which the two figures above
+    # deliberately do not answer: they count only what carries an `agent:` label.
+    # The PR list is the one already fetched -- it is unfiltered, so the totals
+    # cost nothing. Issues need their own request because the query above narrows
+    # by label server-side, and it must drop the pull requests GitHub returns from
+    # /issues, or every PR would be counted twice.
+    repo_issues = [
+        i for i in api(f"repos/{ORG}/{repo}/issues?state=all&per_page=100", paginate=True) or []
+        if "pull_request" not in i
+    ]
+
     manifest = api(f"repos/{ORG}/{repo}/contents/binding.yml")
     package_id, nuget_version, nuget_date = None, None, None
     if manifest:
@@ -324,6 +335,16 @@ def collect_repo(repo, since, releases, current_agents):
             ),
         },
         "open_issues": len(open_agent_issues),
+        "issues": {
+            "open": sum(1 for i in repo_issues if i["state"] == "open"),
+            "total": len(repo_issues),
+        },
+        # Named `pulls` rather than folded into `prs`, which already means the
+        # agents' pull requests and is rendered as such.
+        "pulls": {
+            "open": sum(1 for p in prs if p["state"] == "open"),
+            "total": len(prs),
+        },
         "silent_failures": silent,
     }, agent_records
 
