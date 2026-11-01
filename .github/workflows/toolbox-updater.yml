@@ -177,16 +177,41 @@ jobs:
           agents_moved=false
           [ "$installed_agents" = "$expected_agents" ] || agents_moved=true
 
+          # Fourth axis: the commit each of the toolbox's own actions is pinned to.
+          #
+          # The workflows say `binding-fetch-upstream@v1`, but the lock carries a SHA, and
+          # `gh aw compile` takes it from `.github/aw/actions-lock.json` whenever an entry
+          # exists rather than asking what `v1` points at now. So a recompile repins the
+          # toolbox in the `source:` line and leaves its actions where they were: ImGui.Net
+          # recorded 4c15efd as its source and still ran binding-fetch-upstream from
+          # d59b6b9, a month before the fix for its own "upload-pack: not our ref", and
+          # failed on it on 1 October and 1 November. Every other axis read "current".
+          stale_pins=""
+          if [ -f .github/aw/actions-lock.json ]; then
+            stale_pins=$(jq -r --arg p "${{ inputs.toolbox }}/" --arg ref "${{ inputs.ref }}" --arg sha "$latest" \
+              '.entries // {} | to_entries[]
+               | select((.key | startswith($p)) and .value.version == $ref and .value.sha != $sha)
+               | .key' .github/aw/actions-lock.json || true)
+          fi
+          pins_moved=false
+          if [ -n "$stale_pins" ]; then
+            pins_moved=true
+            echo "toolbox actions pinned behind $latest:"
+            printf '  %s\n' $stale_pins
+          fi
+
           reason=""
           [ "$toolbox_moved" = true ] && reason="${reason:+$reason+}toolbox"
           [ "$compiler_moved" = true ] && reason="${reason:+$reason+}compiler"
           [ "$agents_moved" = true ] && reason="${reason:+$reason+}agents"
+          [ "$pins_moved" = true ] && reason="${reason:+$reason+}pins"
           reason=${reason:-none}
 
           # A PR that moves no toolbox SHA must not say it repinned one.
           case "$reason" in
             compiler) title="chore: recompile agents against gh-aw $current" ;;
             agents)   title="chore: install only the agents this repository can use" ;;
+            pins)     title="chore: repin toolbox actions to the current ${{ inputs.ref }}" ;;
             *)        title="chore: update agents to the current toolbox release" ;;
           esac
 
@@ -246,6 +271,16 @@ jobs:
                  rm -f ".github/workflows/$agent.md" ".github/workflows/$agent.lock.yml" ;;
             esac
           done
+
+          # Forget the toolbox's own action pins so the compile resolves `@ref` afresh.
+          # Left in place they win over the tag, which is the fourth axis above. Only
+          # ours: third-party pins move when their owners say so, not when we release.
+          if [ -f .github/aw/actions-lock.json ]; then
+            jq --arg p "${{ inputs.toolbox }}/" \
+              '.entries |= with_entries(select(.key | startswith($p) | not))' \
+              .github/aw/actions-lock.json > actions-lock.json.tmp
+            mv actions-lock.json.tmp .github/aw/actions-lock.json
+          fi
 
           gh aw compile --strict
 

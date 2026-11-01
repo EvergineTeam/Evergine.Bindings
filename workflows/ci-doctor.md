@@ -18,8 +18,12 @@ permissions:
   copilot-requests: write
 strict: true
 model: claude-sonnet-5
-max-turns: 25
-max-ai-credits: 150
+# `max-turns` is the API proxy's hard cap on model calls, not a soft hint. At 25 the
+# 1 November run on ImGui.Net spent every one reading the logs of the two failures in
+# front of it and was cut off before writing a word, having used 59 of its 150
+# credits. A diagnosis that never gets written is the expensive outcome.
+max-turns: 60
+max-ai-credits: 300
 network:
   allowed: [defaults, github]
 tools:

@@ -4,6 +4,16 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.31.0] - 2026-11-01
+
+### Fixed
+
+- **The Toolbox Updater repins the toolbox's own actions, not only the `source:` line.** The 1.30.0 fix for ImGui.Net's "upload-pack: not our ref" never reached it: its Binding Updater failed the same way on 1 October and 1 November. The workflows reference `binding-fetch-upstream@v1`, but `gh aw compile` takes the SHA from `.github/aw/actions-lock.json` whenever an entry exists rather than resolving the tag again. So every recompile moved `source:` to the current release and kept the action on the commit first recorded. ImGui.Net declared 4c15efd and ran d59b6b9 from 3 August. None of the fourteen repositories with a lock file was on the current `v1`. The updater now drops the toolbox's entries before compiling, so `@v1` is resolved afresh, leaving third-party pins alone. A pin behind the tag is also a fourth axis of drift, because a repository whose source, compiler and agents all read "current" would otherwise never be recompiled.
+
+### Changed
+
+- **CI Doctor gets 60 turns and 300 AI credits, up from 25 and 150.** `max-turns` is the API proxy's hard cap on model calls. On 1 November, ImGui.Net's CD and Binding Updater failed together. The doctor spent all 25 calls reading both logs and was cut off with 59 credits spent, before it had written anything. It left only an "[aw] CI Doctor hit engine rate limit" issue and no diagnosis.
+
 ## [1.30.0] - 2026-09-07
 
 ### Changed
