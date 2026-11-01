@@ -278,24 +278,7 @@ jobs:
             Write-Host "The registry changed but the generated API did not. Nothing to publish."
           }
 
-      # Committed after generation, not before, so the registry and the code
-      # generated from it land in the same commit. Committing the XML first --
-      # which is what this workflow used to do -- is why Vulkan.NET's checked-in
-      # Generated/ sat four months behind its own vk.xml while every published
-      # package was correct.
-      - name: Commit XML and regenerated bindings
-        uses: EvergineTeam/Evergine.Bindings/.github/actions/commit-and-push-or-pr-update@v1
-        with:
-          commit_message: >-
-            Update ${{ inputs.generator-name }} registry${{
-              steps.generated.outputs.generated_changed == 'true'
-                && ' and regenerate bindings' || ' (no API change)' }}
-          mode: auto
-          labels: xml
-          pr_branch_name: chore/update-xml-${{ inputs.generator-name }}
-          pr_title: "Update XML for ${{ inputs.generator-name }}"
-          pr_body: "Automated update of XML file for binding ${{ inputs.generator-name }}."
-
+      # The first step that compiles the binding, so the commit waits for it.
       - name: Generate NuGets
         if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish
         uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-nugets-dotnet@v1
@@ -327,6 +310,53 @@ jobs:
           name: nuget-packages
           path: ${{ inputs.output-folder }}/*.nupkg
           if-no-files-found: error
+
+      # See binding-tracked-cd.yml: the commit runs `git add -A` after packing, and
+      # `nupkgs/` is not ignored in Vulkan.NET or most other callers. Detection staged the
+      # whole tree, so whatever is untracked now came from the build and is excluded
+      # locally; a tracked file the build rewrote is put back as generated.
+      - name: Keep the build's output out of the commit
+        shell: pwsh
+        run: |
+          $produced = @(git -c core.quotePath=false ls-files --others --exclude-standard)
+          if ($produced.Count -gt 0) {
+            Write-Host "Keeping $($produced.Count) file(s) the build wrote out of the commit:"
+            $produced | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" }
+            $exclude = git rev-parse --git-path info/exclude
+            New-Item -ItemType Directory -Force (Split-Path $exclude) | Out-Null
+            # Anchored, with glob metacharacters escaped, so each line matches its own path.
+            $produced | ForEach-Object { '/' + ($_ -replace '([\[\]*?\\])', '\$1') } |
+              Add-Content -Path $exclude
+          }
+          $rewritten = @(git -c core.quotePath=false diff --name-only)
+          if ($rewritten.Count -gt 0) {
+            Write-Host "::warning::The build rewrote $($rewritten.Count) tracked file(s); restoring them as generated:"
+            $rewritten | ForEach-Object { Write-Host "  $_" }
+            git checkout -- $rewritten
+          }
+
+      # Committed after generation, not before, so the registry and the code
+      # generated from it land in the same commit. Committing the XML first --
+      # which is what this workflow used to do -- is why Vulkan.NET's checked-in
+      # Generated/ sat four months behind its own vk.xml while every published
+      # package was correct.
+      #
+      # And after packing, the first step that compiles what was generated, so a
+      # regeneration that does not build fails the run with main untouched. Committing
+      # before it is how ImGui.Net's main received a commit that did not compile on
+      # 1 November 2026, through binding-tracked-cd, which had the same order.
+      - name: Commit XML and regenerated bindings
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/commit-and-push-or-pr-update@v1
+        with:
+          commit_message: >-
+            Update ${{ inputs.generator-name }} registry${{
+              steps.generated.outputs.generated_changed == 'true'
+                && ' and regenerate bindings' || ' (no API change)' }}
+          mode: auto
+          labels: xml
+          pr_branch_name: chore/update-xml-${{ inputs.generator-name }}
+          pr_title: "Update XML for ${{ inputs.generator-name }}"
+          pr_body: "Automated update of XML file for binding ${{ inputs.generator-name }}."
 
       - name: Publish NuGet
         if: ${{ success() && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish) }}

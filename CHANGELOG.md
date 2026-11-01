@@ -4,6 +4,16 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.32.0] - 2026-11-01
+
+### Fixed
+
+- **`binding-tracked-cd` and `binding-xml-cd` compile before they commit.** Both pushed the regenerated bindings to main one step before the first step that builds them. On 1 November that put `bd8923cd` on ImGui.Net's main: regenerated bindings that did not compile, pushed directly by `commit-and-push-or-pr-update` in `auto` mode. Packing then failed, the run went red, and main had already moved. The commit now runs after packing and the artifact upload, just before publishing. A step that fails skips the steps after it, so a binding that does not build leaves main as it was. Sources and regenerated output still land in one commit, which was the reason the commit followed generation in the first place.
+
+  Moving the commit lets it see the build's output. The action runs `git add -A`, and packing leaves the packages in `output-folder`. `nupkgs/` is not ignored in six of the nine callers checked, Vulkan.NET and Tracy.NET among them. A new step runs before the commit and gets the answer from git, so no repository has to keep its `.gitignore` right. Detection had already staged the whole tree, so anything untracked after packing was written by the build. Those paths go into `.git/info/exclude`, which is local to the runner's clone and never committed. If the build rewrote a tracked file, that file is restored to its generated state, with a warning.
+
+  A separate `dotnet build` before the commit would also have worked. It was rejected because packing already builds. A second build would cost minutes on Vulkan-sized bindings, and the commit would then rest on a build that was not the one packed.
+
 ## [1.30.0] - 2026-09-07
 
 ### Changed

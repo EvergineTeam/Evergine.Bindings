@@ -350,25 +350,9 @@ jobs:
           echo "Commit the regenerated output first, then publish."
           exit 1
 
-      # Committed after generation, not before, so the registry and the code
-      # generated from them land in the same commit. Committing the sources first
-      # is why Vulkan.NET's checked-in Generated/ sat four months behind its own
-      # vk.xml while every published package was correct: the regenerated output
-      # was packed and then discarded.
-      - name: Commit upstream sources and regenerated bindings
-        if: ${{ !inputs.publish-only }}
-        uses: EvergineTeam/Evergine.Bindings/.github/actions/commit-and-push-or-pr-update@v1
-        with:
-          commit_message: >-
-            Update ${{ inputs.generator-name }} upstream sources${{
-              steps.generated.outputs.generated_changed == 'true'
-                && ' and regenerate bindings' || ' (no API change)' }}
-          mode: auto
-          labels: upstream
-          pr_branch_name: chore/update-upstream-${{ inputs.generator-name }}
-          pr_title: "Update upstream sources for ${{ inputs.generator-name }}"
-          pr_body: "Automated update of upstream sources for binding ${{ inputs.generator-name }}."
-
+      # The first step that compiles the binding, and so the last thing standing between
+      # regenerated code that does not build and main: the commit is further down for
+      # that reason.
       - name: Generate NuGets
         if: steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only
         uses: EvergineTeam/Evergine.Bindings/.github/actions/binding-generate-nugets-dotnet@v1
@@ -407,6 +391,66 @@ jobs:
           name: nuget-packages
           path: ${{ inputs.output-folder }}/*.nupkg
           if-no-files-found: error
+
+      # The commit below runs `git add -A`, and packing has just written to the working
+      # tree: the packages in output-folder, and bin/ and obj/ under every project it
+      # built. bin/ and obj/ are ignored across the fleet, but `nupkgs/` is not -- Vulkan.NET,
+      # Tracy.NET and four other callers would have committed their own packages.
+      #
+      # Asking each repository to ignore the right paths is a rule nobody would know they
+      # were breaking, so the answer comes from git instead. Detection staged the whole tree
+      # before packing, so anything untracked now was written by the build, and goes into
+      # .git/info/exclude -- local to this clone, never committed, and honoured by
+      # `git add -A`. A tracked file the build rewrote is put back as detection staged it:
+      # the package has been packed already, and what main receives is the generated output,
+      # not a side effect of compiling it.
+      - name: Keep the build's output out of the commit
+        if: ${{ !inputs.publish-only }}
+        shell: pwsh
+        run: |
+          $produced = @(git -c core.quotePath=false ls-files --others --exclude-standard)
+          if ($produced.Count -gt 0) {
+            Write-Host "Keeping $($produced.Count) file(s) the build wrote out of the commit:"
+            $produced | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" }
+            $exclude = git rev-parse --git-path info/exclude
+            New-Item -ItemType Directory -Force (Split-Path $exclude) | Out-Null
+            # Anchored, with glob metacharacters escaped, so each line matches its own path.
+            $produced | ForEach-Object { '/' + ($_ -replace '([\[\]*?\\])', '\$1') } |
+              Add-Content -Path $exclude
+          }
+          $rewritten = @(git -c core.quotePath=false diff --name-only)
+          if ($rewritten.Count -gt 0) {
+            Write-Host "::warning::The build rewrote $($rewritten.Count) tracked file(s); restoring them as generated:"
+            $rewritten | ForEach-Object { Write-Host "  $_" }
+            git checkout -- $rewritten
+          }
+
+      # Committed after generation, not before, so the registry and the code
+      # generated from them land in the same commit. Committing the sources first
+      # is why Vulkan.NET's checked-in Generated/ sat four months behind its own
+      # vk.xml while every published package was correct: the regenerated output
+      # was packed and then discarded.
+      #
+      # And after packing, because packing is the first thing that compiles what was
+      # generated. Committing before it is how ImGui.Net's main received bd8923cd on
+      # 1 November 2026: regenerated bindings that did not build, pushed directly by
+      # `mode: auto`, with the failure arriving one step too late to stop it. A step that
+      # fails skips everything after it, so a binding that does not compile now leaves
+      # main exactly as it was. When the API did not move, nothing is packed and nothing
+      # needs to be: the generated code is the code main already builds.
+      - name: Commit upstream sources and regenerated bindings
+        if: ${{ !inputs.publish-only }}
+        uses: EvergineTeam/Evergine.Bindings/.github/actions/commit-and-push-or-pr-update@v1
+        with:
+          commit_message: >-
+            Update ${{ inputs.generator-name }} upstream sources${{
+              steps.generated.outputs.generated_changed == 'true'
+                && ' and regenerate bindings' || ' (no API change)' }}
+          mode: auto
+          labels: upstream
+          pr_branch_name: chore/update-upstream-${{ inputs.generator-name }}
+          pr_title: "Update upstream sources for ${{ inputs.generator-name }}"
+          pr_body: "Automated update of upstream sources for binding ${{ inputs.generator-name }}."
 
       - name: Publish NuGet
         if: ${{ success() && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only) }}
