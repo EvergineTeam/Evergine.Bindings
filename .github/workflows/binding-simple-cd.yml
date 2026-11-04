@@ -118,10 +118,17 @@ on:
         required: false
         type: string
         default: 'ubuntu-latest'
+    outputs:
+      publish:
+        description: >-
+          'true' when the packages uploaded as the nuget-packages artifact should be published.
+          Callers without NUGET_UPLOAD_TOKEN push them from a job of their own, because nuget.org
+          trusted publishing only accepts a workflow file of the calling repository.
+        value: ${{ jobs.build_and_publish.outputs.publish }}
     secrets:
       NUGET_UPLOAD_TOKEN:
-        description: 'NuGet publish credential (NuGet API key or Azure Artifacts PAT)'
-        required: true
+        description: 'NuGet publish credential (NuGet API key or Azure Artifacts PAT). Omit it to publish with trusted publishing from the caller.'
+        required: false
       WAVE_SENDGRID_TOKEN:
         description: 'SendGrid API key for email notifications'
         required: false
@@ -134,6 +141,10 @@ on:
 jobs:
   build_and_publish:
     runs-on: ${{ inputs.runner-os }}
+    outputs:
+      publish: ${{ inputs.publish-enabled }}
+    env:
+      HAS_NUGET_UPLOAD_TOKEN: ${{ secrets.NUGET_UPLOAD_TOKEN != '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -190,7 +201,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish NuGet
-        if: ${{ success() && inputs.publish-enabled == true }}
+        if: ${{ success() && env.HAS_NUGET_UPLOAD_TOKEN == 'true' && inputs.publish-enabled == true }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/nuget-publish@v1
         with:
           packages-folder: ${{ inputs.output-folder }}

@@ -4,6 +4,16 @@ All notable changes to the bindings toolbox. Versions follow [Semantic Versionin
 
 Consumers pin the moving major tag (`@v1`). Immutable patch tags (`@v1.0.0`) exist for pinning down a specific release.
 
+## [1.33.0] - 2026-11-04
+
+### Added
+
+- **The CD workflows support nuget.org trusted publishing.** The organisation's nuget.org API key expired on 4 November and nuget.org now steers publishers to trusted publishing, where a job exchanges its GitHub OIDC token for a one-hour key. nuget.org checks the token's `job_workflow_ref` against a policy for the publishing repository, so the job that pushes has to be defined in a workflow file of that repository: a push from inside these reusable workflows, which live in Evergine.Bindings, is always refused. `binding-simple-cd`, `binding-tracked-cd` and `binding-xml-cd` now expose a `publish` output and make `NUGET_UPLOAD_TOKEN` optional. Without it they leave the `nuget-packages` artifact for a `publish` job in the caller (`id-token: write`, `NuGet/login@v1` with `vars.EVERGINE_NUGETORG_USER`). With it they push as before.
+
+### Fixed
+
+- **`binding-xml-cd` honours `force-publish` when the registry has not changed.** The XML gate skipped the whole build, so a run whose push failed after committing the new registry left a package that no later run could ship. That is what happened to Evergine.Bindings.OpenXR on 4 November.
+
 ## [1.32.0] - 2026-11-01
 
 ### Fixed

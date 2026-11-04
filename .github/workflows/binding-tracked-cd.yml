@@ -190,8 +190,8 @@ on:
         default: 'ubuntu-latest'
     secrets:
       NUGET_UPLOAD_TOKEN:
-        description: 'NuGet publish credential (NuGet API key or Azure Artifacts PAT)'
-        required: true
+        description: 'NuGet publish credential (NuGet API key or Azure Artifacts PAT). Omit it to publish with trusted publishing from the caller.'
+        required: false
       WAVE_SENDGRID_TOKEN:
         description: 'SendGrid API key for email notifications'
         required: false
@@ -211,6 +211,12 @@ on:
           download rather than on anything meaningful. Needed by any caller that puts its own
           jobs after this one -- a smoke test before publishing, for instance.
         value: ${{ jobs.build_and_publish.outputs.packaged }}
+      publish:
+        description: >-
+          'true' when the packages uploaded as the nuget-packages artifact should be published.
+          Callers without NUGET_UPLOAD_TOKEN push them from a job of their own, because nuget.org
+          trusted publishing only accepts a workflow file of the calling repository.
+        value: ${{ jobs.build_and_publish.outputs.publish }}
 
 jobs:
   build_and_publish:
@@ -218,6 +224,9 @@ jobs:
     outputs:
       # The same condition the packing, listing and upload steps carry, in one place.
       packaged: ${{ steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only }}
+      publish: ${{ inputs.publish-enabled && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only) }}
+    env:
+      HAS_NUGET_UPLOAD_TOKEN: ${{ secrets.NUGET_UPLOAD_TOKEN != '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -453,7 +462,7 @@ jobs:
           pr_body: "Automated update of upstream sources for binding ${{ inputs.generator-name }}."
 
       - name: Publish NuGet
-        if: ${{ success() && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only) }}
+        if: ${{ success() && env.HAS_NUGET_UPLOAD_TOKEN == 'true' && inputs.publish-enabled == true && (steps.generated.outputs.generated_changed == 'true' || inputs.force-publish || inputs.publish-only) }}
         uses: EvergineTeam/Evergine.Bindings/.github/actions/nuget-publish@v1
         with:
           packages-folder: ${{ inputs.output-folder }}
